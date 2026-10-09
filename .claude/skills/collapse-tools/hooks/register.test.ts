@@ -65,7 +65,7 @@ test('an expanded Agent row keeps the engine row under the header; the status wo
   await use.press({ key: 'collapse-tools:toolu_2' })
   expect(await use.find({ text: '[-] Agent  ls' })).toBeDefined()
   expect(JSON.stringify(await use.drawn())).toContain('engine row')
-  expect(JSON.stringify(await use.drawn())).toContain('"color":"#7d9a83"')
+  expect(JSON.stringify(await use.drawn())).toContain('"color":"white"')
 })
 
 test('the startup hint toasts once per session, and only for an interactive session', async ($, on) => {

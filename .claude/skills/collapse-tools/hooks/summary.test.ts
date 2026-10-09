@@ -44,10 +44,10 @@ test('status precedence is interrupted, error, running, done', () => {
   expect(statusOf(call)).toBe('done')
 })
 
-test('the default done color is the muted hex and not bold; problems stay bold and colored', () => {
-  expect(DEFAULT_DONE_COLOR).toBe('#7d9a83')
-  expect(STATUS_COLOR).toEqual({ done: '#7d9a83', error: 'error', running: 'warning', interrupted: 'inactive' })
-  expect(nameOf(collapsedSegments(call, 80))).toEqual({ text: 'Bash', color: '#7d9a83', bold: false })
+test('the default done color is white and not bold; problems stay bold and colored', () => {
+  expect(DEFAULT_DONE_COLOR).toBe('white')
+  expect(STATUS_COLOR).toEqual({ done: 'white', error: 'error', running: 'warning', interrupted: 'inactive' })
+  expect(nameOf(collapsedSegments(call, 80))).toEqual({ text: 'Bash', color: 'white', bold: false })
   expect(nameOf(collapsedSegments({ ...call, isErrored: true }, 80))).toEqual({ text: 'Bash', color: 'error', bold: true })
   expect(nameOf(collapsedSegments({ ...call, isRunning: true }, 80))).toEqual({ text: 'Bash', color: 'warning', bold: true })
   expect(nameOf(collapsedSegments({ ...call, isInterrupted: true }, 80))?.color).toBe('inactive')

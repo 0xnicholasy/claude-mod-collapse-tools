@@ -8,7 +8,7 @@
   <a href="#installation">Install</a> · <a href="#usage">Usage</a> · <a href="#how-it-works">How it works</a>
 </div>
 
-Collapse Tools is a Claude Code plugin that draws each tool-call row in the transcript as one line, `[+] Name  arg`, to save screen rows. Click a row to expand it into a single `[-]` header followed by the normal output, or run `/collapse-tools` to toggle all calls at once. A toast at session start (once) tells you how. The tool name of a finished call is a muted sage by default, and you can change that color.
+Collapse Tools is a Claude Code plugin that draws each tool-call row in the transcript as one line, `[+] Name  arg`, to save screen rows. Click a row to expand it into a single `[-]` header followed by the normal output, or run `/collapse-tools` to toggle all calls at once. A toast at session start (once) tells you how. The tool name of a finished call is white by default, and you can change that color.
 
 ## What it looks like
 
@@ -28,7 +28,7 @@ One expanded row (the header replaces the engine's row; the result is drawn as u
 
 ## Features
 
-- One-line rows. Each call reads `[+] Name  arg`. The name of a done call is a muted sage (`#7d9a83`, not bold) that you can change; a running call is yellow, an error red and an interrupted call gray, all three bold. A status word (`running`, `error`, `interrupted`) is right-aligned at the end of the row, in the same color; a done call shows none.
+- One-line rows. Each call reads `[+] Name  arg`. The name of a done call is white (not bold) by default and you can change it; a running call is yellow, an error red and an interrupted call gray, all three bold. A status word (`running`, `error`, `interrupted`) is right-aligned at the end of the row, in the same color; a done call shows none.
 - Readable names. An MCP tool `mcp__server__tool` shows as `server:tool`.
 - Click hint. `[+]` marks a row you can click. Once per session, on start, a toast says "click a [+] row to expand, /collapse-tools to toggle all".
 - Click to expand. Clicking a row expands that call into a single `[-]` header with the full input; clicking the header collapses it again.
@@ -77,7 +77,7 @@ Tool calls are collapsed by default. These controls change that:
 | `/collapse-tools` | Flips the default for all calls (collapsed to expanded, or back) and clears every per-call toggle. Replies "Tool calls collapsed to one line." or "Tool calls expanded." The new default is saved. |
 | Click a line | Toggles that one call against the current default. Not saved across sessions. |
 
-Done color: `<name>` is black, red, green, yellow, blue, magenta, cyan, white, gray (or grey), `claude`, or a `...Bright` variant of the basic names; `#rrggbb` also works. The color in effect is the one saved by `/collapse-tools color`, else the `doneColor` plugin option (Done color; default `#7d9a83`), else `#7d9a83`. An invalid option value falls back to the default.
+Done color: `<name>` is black, red, green, yellow, blue, magenta, cyan, white, gray (or grey), `claude`, or a `...Bright` variant of the basic names; `#rrggbb` also works. The color in effect is the one saved by `/collapse-tools color`, else the `doneColor` plugin option (Done color; default `white`), else `white`. An invalid option value falls back to the default.
 
 A per-call toggle beats the default until the next `/collapse-tools`. The status is `interrupted` if the call was aborted, otherwise `error` if it failed, otherwise `running` while it runs, otherwise `done`.
 

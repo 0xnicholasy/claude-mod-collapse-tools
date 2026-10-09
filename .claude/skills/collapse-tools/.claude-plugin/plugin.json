@@ -1,7 +1,7 @@
 {
   "name": "collapse-tools",
-  "version": "0.2.0",
-  "description": "Draws each tool call as one line, [+] Name  arg, with the name in a muted color you can change. Click a row to expand it, or run /collapse-tools to toggle all.",
+  "version": "0.2.1",
+  "description": "Draws each tool call as one line, [+] Name  arg, with the name in a color you can change. Click a row to expand it, or run /collapse-tools to toggle all.",
   "author": {
     "name": "0xnicholasy",
     "url": "https://github.com/0xnicholasy"
@@ -20,8 +20,8 @@
     "doneColor": {
       "type": "string",
       "title": "Done color",
-      "description": "Theme key or color for the tool name of finished calls (for example gray, cyan, #7d9a83)",
-      "default": "#7d9a83"
+      "description": "Theme key or color for the tool name of finished calls (for example white, gray, cyan, #7d9a83)",
+      "default": "white"
     }
   }
 }

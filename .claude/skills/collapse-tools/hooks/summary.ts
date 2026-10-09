@@ -28,8 +28,7 @@ export type CallStatus = 'running' | 'error' | 'interrupted' | 'done'
 
 // Theme keys, so the colors follow the person's theme: success green, error red, warning yellow,
 // inactive gray.
-// Muted sage, dimmer than the terminal green the theme key `success` maps to.
-export const DEFAULT_DONE_COLOR = '#7d9a83'
+export const DEFAULT_DONE_COLOR = 'white'
 
 export const STATUS_COLOR: Readonly<Record<CallStatus, string>> = {
   done: DEFAULT_DONE_COLOR,

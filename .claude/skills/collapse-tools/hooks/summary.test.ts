@@ -21,6 +21,14 @@ test('truncation ends with an ellipsis and fits the width', () => {
   expect(summaryLine(call, 10)).toHaveLength(10)
 })
 
+test('truncate handles tiny widths and never splits a surrogate pair', () => {
+  expect(truncate('abcdef', 3)).toBe('abc')
+  expect(truncate('abcdef', 2)).toBe('ab')
+  expect(truncate('abcdef', 0)).toBe('')
+  expect(truncate('\u{1F600}\u{1F600}\u{1F600}', 2)).toBe('\u{1F600}\u{1F600}')
+  expect(truncate('\u{1F600}abcdefgh', 6)).toBe('\u{1F600}ab...')
+})
+
 test('status precedence is interrupted, error, running, done', () => {
   expect(statusOf({ isRunning: true, isErrored: true, isInterrupted: true })).toBe('interrupted')
   expect(statusOf({ isRunning: true, isErrored: true, isInterrupted: false })).toBe('error')
@@ -30,6 +38,8 @@ test('status precedence is interrupted, error, running, done', () => {
 
 test('the summary line is dim ASCII with a marker and falls back to 100 columns', () => {
   expect(summaryLine(call, undefined)).toBe('> Bash(ls -la) . done')
+  expect(summaryLine(call, 0)).toBe('> Bash(ls -la) . done')
+  expect(summaryLine(call, -5)).toBe('> Bash(ls -la) . done')
   expect(summaryLine(call, 100, true)).toBe('v Bash(ls -la) . done')
 })
 

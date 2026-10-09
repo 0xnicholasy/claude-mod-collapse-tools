@@ -3,7 +3,15 @@ import type { EngineInterface, Register } from 'claude-code'
 import { isExpanded, summaryLine } from './summary'
 
 const collapsed = atom({ plugin: 'collapse-tools', key: 'collapsed' } as const, true as boolean)
-const overrides = atom({ plugin: 'collapse-tools', key: 'overrides' } as const, {} as Record<string, boolean>)
+const epoch = atom({ plugin: 'collapse-tools', key: 'epoch' } as const, 0)
+// Per-call override family: each member is addressed by tool_use_id, so a click redraws only that call.
+const overrideRef = { plugin: 'collapse-tools', key: 'overrides' } as const
+
+type Override = { epoch: number; open: boolean }
+
+// A member written under an older epoch was reset by /collapse-tools and counts as no override.
+const openOf = (entry: Override | undefined, current: number): boolean | undefined =>
+  entry !== undefined && entry.epoch === current ? entry.open : undefined
 
 const STORE_KEY = 'collapsed'
 
@@ -11,7 +19,9 @@ const STORE_KEY = 'collapsed'
 async function loadSaved($: EngineInterface): Promise<void> {
   try {
     const saved = await $.store.get(STORE_KEY)
-    if (typeof saved === 'boolean') await update($, collapsed, () => saved)
+    if (typeof saved !== 'boolean') return
+    const current = await read($, collapsed)
+    if (saved !== current) await update($, collapsed, () => saved)
   } catch (error) {
     $.ui.log(`collapse-tools: store read failed ${String(error)}`, { to: 'debug' })
   }
@@ -38,7 +48,7 @@ export const register: Register = on => {
   on('command.run', { command: 'collapse-tools' }, async $ => {
     const next = !(await read($, collapsed))
     await update($, collapsed, () => next)
-    await update($, overrides, () => ({}))
+    await update($, epoch, n => n + 1)
     try {
       await $.store.set(STORE_KEY, next)
     } catch (error) {
@@ -51,9 +61,13 @@ export const register: Register = on => {
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const id = e.props.tool_use_id
-    const [global, map] = await Promise.all([read($, collapsed), read($, overrides)])
-    const open = isExpanded(global, map[id])
-    const toggle = () => update($, overrides, cur => ({ ...cur, [id]: !open }))
+    const member = { ...overrideRef, id }
+    const [global, current, entry] = await Promise.all([read($, collapsed), read($, epoch), read($, member)])
+    const open = isExpanded(global, openOf(entry, current))
+    const toggle = async () => {
+      const [g, ep] = await Promise.all([read($, collapsed), read($, epoch)])
+      await update($, member, cur => ({ epoch: ep, open: !isExpanded(g, openOf(cur, ep)) }))
+    }
     const line = summaryLine(e.props, e.viewport?.columns, open)
     const row = (
       <Button key={`collapse-tools:${id}`} plain onPress={toggle}>
@@ -74,9 +88,13 @@ export const register: Register = on => {
   on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
     const { Box } = $.ui.resolve(e)
     const id = e.props.tool_use_id
-    const [global, map] = await Promise.all([read($, collapsed), read($, overrides)])
-    if (isExpanded(global, map[id])) return next(e)
+    const [global, current, entry] = await Promise.all([
+      read($, collapsed),
+      read($, epoch),
+      read($, { ...overrideRef, id }),
+    ])
+    if (isExpanded(global, openOf(entry, current))) return next(e)
 
-    return <Box height={0} />
+    return <Box display="none" />
   })
 }

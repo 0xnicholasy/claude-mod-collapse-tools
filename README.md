@@ -31,4 +31,4 @@ Claude Code 2.1.295 or later with plugin hooks.
 ## Known limits
 
 - Not verified in a live session: how the collapsed result block spacing looks, and whether a click lands on the line on every surface.
-- The collapsed result is a zero-height Box, so a margin the engine puts around results may still show.
+- The collapsed result is a Box with display none, so a margin the engine puts around results may still show.

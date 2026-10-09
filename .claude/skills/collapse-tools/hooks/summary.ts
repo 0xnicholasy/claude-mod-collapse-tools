@@ -8,6 +8,7 @@ export type CallStatus = 'running' | 'error' | 'interrupted' | 'done'
 
 export type CallView = {
   tool: string
+  // unknown: mirrors RenderPropsOf.ToolUse.input, which the engine types declare as unknown.
   input: unknown
   isRunning: boolean
   isErrored: boolean
@@ -27,12 +28,12 @@ const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
 export function truncate(text: string, max: number): string {
   if (max <= 0) return ''
-  if (text.length <= max) return text
-  if (max <= 3) return text.slice(0, max)
-  return `${text.slice(0, max - 3)}...`
+  const chars = Array.from(text)
+  if (chars.length <= max) return text
+  if (max <= 3) return chars.slice(0, max).join('')
+  return `${chars.slice(0, max - 3).join('')}...`
 }
 
-// `input` arrives as `unknown` from the model; it is narrowed to a string-keyed record here.
 function asRecord(input: unknown): Record<string, unknown> | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null
   return input as Record<string, unknown>

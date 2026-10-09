@@ -1,8 +1,9 @@
 <div align="center">
+  <img src=".claude/skills/collapse-tools/.claude-plugin/icon.png" alt="Collapse Tools icon" width="120" height="120">
   <h1>Collapse Tools for Claude Code</h1>
   <p>Every tool-call row in the transcript as one dim line.</p>
 
-  [![CI](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml) ![Version](https://img.shields.io/github/package-json/v/0xnicholasy/claude-mod-collapse-tools?filename=.claude%2Fskills%2Fcollapse-tools%2F.claude-plugin%2Fplugin.json&label=version) [![License](https://img.shields.io/github/license/0xnicholasy/claude-mod-collapse-tools)](LICENSE)
+  [![CI](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml) ![Version](https://img.shields.io/github/package-json/v/0xnicholasy/claude-mod-collapse-tools?filename=.claude%2Fskills%2Fcollapse-tools%2F.claude-plugin%2Fplugin.json&label=version) [![License](https://img.shields.io/github/license/0xnicholasy/claude-mod-collapse-tools)](LICENSE) [![Stars](https://img.shields.io/github/stars/0xnicholasy/claude-mod-collapse-tools?style=flat)](https://github.com/0xnicholasy/claude-mod-collapse-tools/stargazers)
 
   <a href="#installation">Install</a> · <a href="#usage">Usage</a> · <a href="#how-it-works">How it works</a>
 </div>

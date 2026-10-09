@@ -7,5 +7,13 @@
     "url": "https://github.com/0xnicholasy"
   },
   "license": "MIT",
+  "homepage": "https://github.com/0xnicholasy/claude-mod-collapse-tools",
+  "repository": "https://github.com/0xnicholasy/claude-mod-collapse-tools",
+  "keywords": [
+    "tool-calls",
+    "transcript",
+    "collapse",
+    "compact"
+  ],
   "types": "./types/index.d.ts"
 }

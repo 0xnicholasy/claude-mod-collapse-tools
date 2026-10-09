@@ -1,7 +1,7 @@
 {
   "name": "collapse-tools",
-  "version": "0.2.1",
-  "description": "Draws each tool call as one line, [+] Name  arg, with the name in a color you can change. Click a row to expand it, or run /collapse-tools to toggle all.",
+  "version": "0.3.0",
+  "description": "Draws each tool call as one line, [+] Name  arg, with the name in a color you can change. Click a row to expand it, or run /collapse-tools to toggle all. Haiku summaries (on by default) replace the raw argument with a short label.",
   "author": {
     "name": "0xnicholasy",
     "url": "https://github.com/0xnicholasy"
@@ -22,6 +22,12 @@
       "title": "Completed call color",
       "description": "Color of the tool name when a call completed successfully (running calls are yellow, errors red). Theme key or color, for example white, gray, cyan, #7d9a83. Default white.",
       "default": "white"
+    },
+    "summaries": {
+      "type": "boolean",
+      "title": "Haiku summaries",
+      "description": "Replace long or multi-step tool arguments on collapsed rows with a short Haiku summary. Default on.",
+      "default": true
     }
   }
 }

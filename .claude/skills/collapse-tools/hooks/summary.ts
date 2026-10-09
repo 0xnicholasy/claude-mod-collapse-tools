@@ -163,11 +163,13 @@ function clipSegments(segments: readonly Segment[], width: number): Segment[] {
 }
 
 // `[+] Name  arg            status`: the marker dim, the name bold in the status color, the arg dim
-// and cut to fit, the status word right-aligned and only when the call is not done.
+// and cut to fit, the status word right-aligned and only when the call is not done. A non-empty
+// `summary` (the Haiku label) is drawn where the arg would be.
 export function collapsedSegments(
   call: CallView,
   columns: number | undefined,
   doneColor: string = DEFAULT_DONE_COLOR,
+  summary?: string,
 ): Segment[] {
   const width = Math.max(validColumns(columns) - MARGIN, 1)
   const status = statusOf(call)
@@ -179,7 +181,7 @@ export function collapsedSegments(
   ]
   const wordRoom = word === '' ? 0 : GAP + length(word)
   const argRoom = width - segmentsLength(segments) - GAP - wordRoom
-  const arg = pickArg(call.input)
+  const arg = summary !== undefined && squash(summary) !== '' ? squash(summary) : pickArg(call.input)
   if (arg !== '' && argRoom >= MIN_ARG) segments.push({ text: ' '.repeat(GAP) + truncate(arg, argRoom), dim: true })
   if (word !== '') {
     const pad = Math.max(GAP, width - segmentsLength(segments) - length(word))

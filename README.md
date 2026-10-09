@@ -20,6 +20,14 @@ Collapsed rows: done, running and error (the `[+]` is dim, the argument is dim, 
 [+] Edit  /src/app.ts                                                      error
 ```
 
+With Haiku summaries on (the default) the argument is replaced by a short label once it arrives:
+
+```
+[+] Bash  check repo status and fetch origin
+[+] Read  load the auth middleware
+[+] todo-list:plan  mark step 1 in progress
+```
+
 One expanded row (the header replaces the engine's row; the result is drawn as usual below it):
 
 ```
@@ -29,6 +37,7 @@ One expanded row (the header replaces the engine's row; the result is drawn as u
 ## Features
 
 - One-line rows. Each call reads `[+] Name  arg`. The name of a done call is white (not bold) by default and you can change it; a running call is yellow, an error red and an interrupted call gray, all three bold. A status word (`running`, `error`, `interrupted`) is right-aligned at the end of the row, in the same color; a done call shows none.
+- Haiku summaries. Each collapsed row can show a short plain-English label of what the call does and why, made by Haiku, instead of the raw argument. On by default; `/collapse-tools summary on|off` or the `summaries` option. The expanded header always keeps the raw input.
 - Readable names. An MCP tool `mcp__server__tool` shows as `server:tool`.
 - Click hint. `[+]` marks a row you can click. Once per session, on start, a toast says "click a [+] row to expand, /collapse-tools to toggle all".
 - Click to expand. Clicking a row expands that call into a single `[-]` header with the full input; clicking the header collapses it again.
@@ -74,10 +83,13 @@ Tool calls are collapsed by default. These controls change that:
 | Control | Effect |
 |---|---|
 | `/collapse-tools color <name\|#hex\|reset>` | Sets the color of the tool name of finished calls and saves it for future sessions. `reset` clears the saved color. An unknown color is rejected with a message; any other argument prints a usage line. |
+| `/collapse-tools summary on\|off` | Turns Haiku summaries on or off and saves the choice for future sessions. Any other argument prints a usage line. |
 | `/collapse-tools` | Flips the default for all calls (collapsed to expanded, or back) and clears every per-call toggle. Replies "Tool calls collapsed to one line." or "Tool calls expanded." The new default is saved. |
 | Click a line | Toggles that one call against the current default. Not saved across sessions. |
 
 Completed-call color (marks a call that completed successfully; running is yellow, error red, interrupted gray): `<name>` is black, red, green, yellow, blue, magenta, cyan, white, gray (or grey), `claude`, or a `...Bright` variant of the basic names; `#rrggbb` also works. The color in effect is the one saved by `/collapse-tools color`, else the `doneColor` plugin option (Completed call color; default `white`), else `white`. An invalid option value falls back to the default.
+
+Haiku summaries: the setting in effect is the one saved by `/collapse-tools summary on|off`, else the `summaries` plugin option (Haiku summaries; default on), else on. When on, each tool call (every tool, MCP tools included) triggers one Haiku request made beside the tool, and the collapsed row shows `[+] Name  <summary>` in place of the argument once the reply arrives. The label is at most 8 words, cleaned of quotes and trailing punctuation and cut to 60 characters. A repeated call with the same tool and the same input reuses the earlier label, so it costs one request. If the request fails or times out (4 seconds) the row keeps the raw argument and one line goes to the debug log. With summaries off, rows show the raw argument even if a label was already made.
 
 A per-call toggle beats the default until the next `/collapse-tools`. The status is `interrupted` if the call was aborted, otherwise `error` if it failed, otherwise `running` while it runs, otherwise `done`.
 
@@ -89,13 +101,14 @@ Tools that keep the engine's row: for `Agent`, `Task`, `AskUserQuestion`, `TodoW
 
 ## How it works
 
-The plugin registers five hooks in `.claude/skills/collapse-tools/hooks/register.tsx`. The pure logic (argument picking, status, row building, expand rule) is in `hooks/summary.ts`.
+The plugin registers six hooks in `.claude/skills/collapse-tools/hooks/register.tsx`. The pure logic (argument picking, status, row building, expand rule) is in `hooks/summary.ts`; the Haiku summary logic (prompt, input compaction, cache key, reply cleaning, setting precedence) is in `hooks/summarize.ts`.
 
 | Hook | What it does |
 |---|---|
-| `session.start` | Loads the saved default and done color from the plugin store, registers the `/collapse-tools` command and, once per session, shows the click-hint toast. |
-| `turn.start` | Reloads the saved default and, when unset, the done color. `/clear` resets the atoms and no `session.start` follows, so this restores the choice on the next turn. |
-| `command.run` (`collapse-tools`) | With `color ...`, sets or resets the done color. Otherwise flips the default, increments the epoch (which invalidates per-call toggles), saves the default to the store and returns the reply text. |
+| `session.start` | Loads the saved default, done color and summaries setting from the plugin store, registers the `/collapse-tools` command and, once per session, shows the click-hint toast. |
+| `turn.start` | Reloads the saved default and, when unset, the done color and the summaries setting. `/clear` resets the atoms and no `session.start` follows, so this restores the choice on the next turn. |
+| `tool.call` | Starts the tool at once, asks Haiku for a label of the call beside it, stores the label under the call's `tool_use_id`, and waits for both. It resolves with exactly what the tool resolved (or rejects with what the tool rejected with). |
+| `command.run` (`collapse-tools`) | With `color ...`, sets or resets the done color; with `summary on\|off`, sets the summaries setting. Otherwise flips the default, increments the epoch (which invalidates per-call toggles), saves the default to the store and returns the reply text. |
 | `ui.render` (`ToolUse`) | Replaces the call row with a button line. Collapsed it is the `[+]` row; expanded it is the `[-]` header, followed by the engine's own row for the tools listed above. |
 | `ui.render` (`ToolResult`) | Draws the engine's result when the call is expanded. Otherwise returns a `Box` with `display="none"`. |
 
@@ -107,16 +120,19 @@ State atoms (declared in `types/index.d.ts` under `collapse-tools`):
 | `epoch` | number | Counter bumped by `/collapse-tools`. A toggle written under an older epoch counts as no toggle. |
 | `hinted` | boolean | True once the startup toast was shown. Starts `false`. |
 | `doneColorOverride` | string or null | The color saved by `/collapse-tools color`; null defers to the `doneColor` option. |
+| `summariesOn` | boolean or null | The setting saved by `/collapse-tools summary`; null defers to the `summaries` option. |
+| `summaries` | family of string | The Haiku label of each call, keyed by `tool_use_id`. Written by the `tool.call` hook, read by the render. |
+| `summaryCache` | family of string | Labels already made this session, keyed by a hash of the tool and its compact input. |
 | `overrides` | family of `{ epoch, open }` | Per-call toggle, keyed by `tool_use_id`. A click redraws only that call. |
 
-`collapsed` and the done color are persisted, under the plugin store keys `collapsed` and `doneColor`. If a store read or write fails, the error goes to the debug log and the in-session value is kept. Render hooks never write state; writes happen in the click handler and in `command.run`.
+`collapsed`, the done color and the summaries setting are persisted, under the plugin store keys `collapsed`, `doneColor` and `summaries`. If a store read or write fails, the error goes to the debug log and the in-session value is kept. Render hooks never write state; writes happen in the click handler and in `command.run`.
 
 ## Data and privacy
 
-- The plugin makes no network calls.
-- The only persisted data is the default choice and the done color, stored under two plugin store keys (`collapsed`, `doneColor`) when you run `/collapse-tools` or `/collapse-tools color`.
-- Per-call toggles and the epoch live in session state and are not written to disk by the plugin.
-- The plugin reads tool-call inputs only to build the one-line summary on screen. It does not store them, log them or send them anywhere.
+- The plugin makes no network calls of its own. With summaries on, it sends the tool name and a compact copy of the tool input (strings cut at 400 characters, arrays and objects cut at 400 characters of JSON) to Haiku. Summaries are generated from the tool input sent through the session's own API client, same provider as the session. Turn summaries off with `/collapse-tools summary off` or the `summaries` option if you do not want tool inputs in a second model request.
+- The only persisted data is the default choice, the done color and the summaries setting, stored under three plugin store keys (`collapsed`, `doneColor`, `summaries`) when you run `/collapse-tools`, `/collapse-tools color` or `/collapse-tools summary`.
+- Per-call toggles, the epoch, the summaries and the summary cache live in session state and are not written to disk by the plugin.
+- Apart from the Haiku request above, tool-call inputs are used only to build the one-line row on screen. The plugin does not store them or log them.
 - It reads no credentials or environment variables, and does not read or write files or run processes.
 
 ## Requirements
@@ -147,6 +163,11 @@ npm run check
 - A collapsed result is a Box with `display="none"`, the only draw-nothing option the API documents (a hook must return an element; it cannot return null). A margin the engine puts around each transcript message cannot be changed from a plugin, so some spacing between consecutive collapsed rows may remain.
 - Which tools keep the engine's row is a judgment from the API types, not from a live check. A tool not listed whose engine row carries extra detail loses that detail when expanded.
 - Expanded input is shown on one line per field set (whitespace collapsed), so multi-line commands lose their line breaks.
+- A summary adds latency to the tool call: the hook waits for the Haiku request as well as the tool, so a call that is faster than Haiku is held up to 4 seconds (the request timeout) before it returns. The tool itself starts at once.
+- Until a summary lands, the row shows the raw argument. If the request fails or times out, it stays raw.
+- Summaries are session-only: they are not saved, so a resumed session shows raw arguments for earlier calls.
+- Not verified in a live session: the real Haiku reply quality and latency, and how `$.model.complete` behaves under every provider. Tests stub the model.
+- Summaries are written by a small model and can be wrong or vague; the expanded header shows the real input.
 - Colors and the toast need a surface that draws them; only the terminal surface is assumed.
 
 ## License

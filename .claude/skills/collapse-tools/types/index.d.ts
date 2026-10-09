@@ -5,7 +5,10 @@ declare module 'claude-code' {
       epoch: number
       hinted: boolean
       doneColorOverride: string | null
+      summariesOn: boolean | null
       overrides: StateFamily<{ epoch: number; open: boolean }>
+      summaries: StateFamily<string>
+      summaryCache: StateFamily<string>
     }
   }
 }

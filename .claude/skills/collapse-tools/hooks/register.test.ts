@@ -1,4 +1,4 @@
-import type { CommandRunInput } from 'claude-code'
+import type { CommandRunInput, ModelCompleteInput, ModelCompleteResult, On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { HINT_TEXT } from './summary'
@@ -124,4 +124,122 @@ test('color subcommand: an invalid color is rejected without saving; a valid one
   expect(reset.text).toContain('Completed-call color reset')
   expect(deleted).toEqual(['doneColor'])
   expect((await $.command.run({ ...RUN, args: 'bogus' })).text).toContain('Usage: /collapse-tools')
+})
+
+const USAGE_ZERO = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+const answer = (text: string) => ({ value: { isAnswered: true as const, text, usage: USAGE_ZERO } })
+const bashResult = { stdout: 'x', stderr: '', interrupted: false }
+
+// Stubs the tool beneath the plugin (recording each call's id) and the model (recording each request).
+function stubCalls(on: On, reply: () => { value: ModelCompleteResult }) {
+  const ids: string[] = []
+  const requests: ModelCompleteInput[] = []
+  on('tool.call', async (_$, e) => {
+    ids.push(e.tool_use_id)
+    return { result: bashResult }
+  })
+  on('model.complete', async (_$, e) => {
+    requests.push(e)
+    return reply()
+  })
+  return { ids, requests }
+}
+
+test('a Bash call is summarized by one Haiku request and the collapsed row shows the summary', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  const { ids, requests } = stubCalls(on, () => answer('"Check repo status and fetch origin."'))
+  const out = await $.tool.call({ tool: 'Bash', command: 'git status && git fetch origin' })
+  expect(out.result).toEqual(bashResult)
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toMatchObject({ model: 'haiku', effort: 'low', maxTokens: 40, timeoutMs: 4000 })
+  expect(requests[0]?.prompt).toBe('Tool: Bash\nInput: {"command":"git status && git fetch origin"}')
+  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
+  expect(await use.find({ text: '[+] Bash  Check repo status and fetch origin' })).toBeDefined()
+  await use.press({ key: `collapse-tools:${ids[0]}` })
+  expect(await use.find({ text: '[-] Bash  ls' })).toBeDefined()
+})
+
+test('a repeated identical call reuses the cached summary; a different input asks again', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  const { ids, requests } = stubCalls(on, () => answer('Load the auth middleware'))
+  await $.tool.call({ tool: 'Bash', command: 'cat auth.ts' })
+  await $.tool.call({ tool: 'Bash', command: 'cat auth.ts' })
+  expect(requests).toHaveLength(1)
+  const [second] = await mountTool($, 'Bash', ids[1] ?? '')
+  expect(await second.find({ text: '[+] Bash  Load the auth middleware' })).toBeDefined()
+  await $.tool.call({ tool: 'Bash', command: 'cat other.ts' })
+  expect(requests).toHaveLength(2)
+})
+
+test('a failed completion keeps the raw arg and the call still returns the tool result', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  const logs: string[] = []
+  on('ui.log', async (_$, e) => {
+    logs.push(e.text)
+    return { value: undefined }
+  })
+  const { ids } = stubCalls(on, () => ({
+    value: { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: USAGE_ZERO },
+  }))
+  const out = await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(out.result).toEqual(bashResult)
+  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
+  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
+  expect(logs.filter(text => text.includes('api-error'))).toHaveLength(1)
+})
+
+test('summary off is saved and rows show the raw arg again even with a summary stored; on restores it', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  const saved: Array<{ key: string; value: unknown }> = []
+  on('store.set', async (_$, e) => {
+    saved.push({ key: e.key, value: e.value })
+    return { value: undefined }
+  })
+  const { ids } = stubCalls(on, () => answer('Show working tree status'))
+  await $.tool.call({ tool: 'Bash', command: 'git status' })
+  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
+  expect(await use.find({ text: '[+] Bash  Show working tree status' })).toBeDefined()
+
+  const off = await $.command.run({ ...RUN, args: 'summary off' })
+  expect(off.text).toBe('Haiku summaries off. Saved for future sessions.')
+  expect(saved).toContainEqual({ key: 'summaries', value: false })
+  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
+
+  await $.command.run({ ...RUN, args: 'summary on' })
+  expect(saved).toContainEqual({ key: 'summaries', value: true })
+  expect(await use.find({ text: '[+] Bash  Show working tree status' })).toBeDefined()
+  expect((await $.command.run({ ...RUN, args: 'summary maybe' })).text).toBe('Usage: /collapse-tools summary on|off')
+})
+
+test('with summaries off nothing is sent to the model', async ($, on) => {
+  const { requests } = stubCalls(on, () => answer('unused'))
+  await $.command.run({ ...RUN, args: 'summary off' })
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(requests).toHaveLength(0)
+})
+
+test('the summaries option off stops requests until the saved value says on', { options: { summaries: false } }, async ($, on) => {
+  on('store.set', async () => ({ value: undefined }))
+  const { requests } = stubCalls(on, () => answer('Do something'))
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(requests).toHaveLength(0)
+  await $.command.run({ ...RUN, args: 'summary on' })
+  await $.tool.call({ tool: 'Bash', command: 'ls -la' })
+  expect(requests).toHaveLength(1)
+})
+
+test('a completion the engine refuses (rejects) leaves the raw arg and never throws out of the hook', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  const ids: string[] = []
+  on('tool.call', async (_$, e) => {
+    ids.push(e.tool_use_id)
+    return { result: bashResult }
+  })
+  on('model.complete', async () => {
+    throw new Error('model blocked')
+  })
+  const out = await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(out.result).toEqual(bashResult)
+  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
+  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
 })

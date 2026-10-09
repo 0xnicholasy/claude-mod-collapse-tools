@@ -1,0 +1,11 @@
+{
+  "name": "collapse-tools",
+  "version": "0.1.0",
+  "description": "Collapses every tool-call row in the transcript to one line; click a line to expand it, or run /collapse-tools to toggle all.",
+  "author": {
+    "name": "0xnicholasy",
+    "url": "https://github.com/0xnicholasy"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

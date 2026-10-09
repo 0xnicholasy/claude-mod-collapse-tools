@@ -1,0 +1,13 @@
+{
+  "name": "claude-mod-collapse-tools",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "validate": "claude plugin validate .claude/skills/collapse-tools",
+    "test": "claude plugin test .claude/skills/collapse-tools",
+    "check": "npm run validate && npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

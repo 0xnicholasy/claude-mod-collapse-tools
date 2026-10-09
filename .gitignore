@@ -1,0 +1,4 @@
+node_modules/
+.claude/worktrees/
+.claude/skills/collapse-tools/.claude-plugin/types/
+*.log

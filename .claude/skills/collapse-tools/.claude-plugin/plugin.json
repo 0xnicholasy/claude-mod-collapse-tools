@@ -19,8 +19,8 @@
   "userConfig": {
     "doneColor": {
       "type": "string",
-      "title": "Done color",
-      "description": "Theme key or color for the tool name of finished calls (for example white, gray, cyan, #7d9a83)",
+      "title": "Completed call color",
+      "description": "Color of the tool name when a call completed successfully (running calls are yellow, errors red). Theme key or color, for example white, gray, cyan, #7d9a83. Default white.",
       "default": "white"
     }
   }

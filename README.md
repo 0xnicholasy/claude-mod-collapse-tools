@@ -33,7 +33,7 @@ One expanded row (the header replaces the engine's row; the result is drawn as u
 - Click hint. `[+]` marks a row you can click. Once per session, on start, a toast says "click a [+] row to expand, /collapse-tools to toggle all".
 - Click to expand. Clicking a row expands that call into a single `[-]` header with the full input; clicking the header collapses it again.
 - `/collapse-tools` command. Switches the default for all calls and clears per-call toggles. The choice is saved across sessions.
-- Pickable done color. `/collapse-tools color <name|#hex|reset>` or the `doneColor` option.
+- Pickable completed-call color (the color of a call that completed successfully; running is yellow, error red, interrupted gray). `/collapse-tools color <name|#hex|reset>` or the `doneColor` option.
 - Collapsed results. The result block of a collapsed call is not drawn.
 - Tool groups such as `Read 3 files` are left to the engine.
 
@@ -77,7 +77,7 @@ Tool calls are collapsed by default. These controls change that:
 | `/collapse-tools` | Flips the default for all calls (collapsed to expanded, or back) and clears every per-call toggle. Replies "Tool calls collapsed to one line." or "Tool calls expanded." The new default is saved. |
 | Click a line | Toggles that one call against the current default. Not saved across sessions. |
 
-Done color: `<name>` is black, red, green, yellow, blue, magenta, cyan, white, gray (or grey), `claude`, or a `...Bright` variant of the basic names; `#rrggbb` also works. The color in effect is the one saved by `/collapse-tools color`, else the `doneColor` plugin option (Done color; default `white`), else `white`. An invalid option value falls back to the default.
+Completed-call color (marks a call that completed successfully; running is yellow, error red, interrupted gray): `<name>` is black, red, green, yellow, blue, magenta, cyan, white, gray (or grey), `claude`, or a `...Bright` variant of the basic names; `#rrggbb` also works. The color in effect is the one saved by `/collapse-tools color`, else the `doneColor` plugin option (Completed call color; default `white`), else `white`. An invalid option value falls back to the default.
 
 A per-call toggle beats the default until the next `/collapse-tools`. The status is `interrupted` if the call was aborted, otherwise `error` if it failed, otherwise `running` while it runs, otherwise `done`.
 

@@ -41,10 +41,10 @@ async function runColorCommand($: EngineInterface, value: string): Promise<{ tex
     } catch (error) {
       $.ui.log(`collapse-tools: color store delete failed ${String(error)}`, { to: 'debug' })
 
-      return { text: 'Done color reset for this session only; the saved color could not be cleared.' }
+      return { text: 'Completed-call color reset for this session only; the saved color could not be cleared.' }
     }
 
-    return { text: 'Done color reset. The saved color is cleared for future sessions.' }
+    return { text: 'Completed-call color reset. The saved color is cleared for future sessions.' }
   }
   if (value === '') return { text: USAGE }
   const color = validColor(value)
@@ -55,10 +55,10 @@ async function runColorCommand($: EngineInterface, value: string): Promise<{ tex
   } catch (error) {
     $.ui.log(`collapse-tools: color store write failed ${String(error)}`, { to: 'debug' })
 
-    return { text: `Done color set to ${color} for this session only; it could not be saved.` }
+    return { text: `Completed-call color set to ${color} for this session only; it could not be saved.` }
   }
 
-  return { text: `Done color set to ${color}. Saved for future sessions.` }
+  return { text: `Completed-call color set to ${color}. Saved for future sessions.` }
 }
 
 // Loads the saved global choice; a store error or a non-boolean keeps the default (collapsed).

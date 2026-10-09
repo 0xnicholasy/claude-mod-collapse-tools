@@ -1,6 +1,6 @@
 # claude-mod-collapse-tools
 
-A Claude Code mod ("Collapse Tools"): draws every tool-call row in the transcript as one dim line; click a line to expand it, or run `/collapse-tools` to toggle all. Written in TypeScript (TSX) as a plugin of function hooks that hot-reloads in a session.
+A Claude Code mod ("Collapse Tools"): draws every tool-call row in the transcript as one line; click a line to expand it, or run `/collapse-tools` to toggle all. Written in TypeScript (TSX) as a plugin of function hooks that hot-reloads in a session.
 
 ## Stack and commands
 

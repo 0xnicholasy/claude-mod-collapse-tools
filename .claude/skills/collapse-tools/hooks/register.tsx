@@ -1,9 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
-import { isExpanded, summaryLine } from './summary'
+import { HINT_TEXT, collapsedSegments, expandedSegments, isExpanded, keepsEngineRow } from './summary'
 
 const collapsed = atom({ plugin: 'collapse-tools', key: 'collapsed' } as const, true as boolean)
 const epoch = atom({ plugin: 'collapse-tools', key: 'epoch' } as const, 0)
+// True once the startup hint toast was shown, so it appears once per session.
+const hinted = atom({ plugin: 'collapse-tools', key: 'hinted' } as const, false as boolean)
 // Per-call override family: each member is addressed by tool_use_id, so a click redraws only that call.
 const overrideRef = { plugin: 'collapse-tools', key: 'overrides' } as const
 
@@ -34,6 +36,10 @@ export const register: Register = on => {
       name: 'collapse-tools',
       description: 'Toggle between one-line and full tool-call rows',
     })
+    if (e.isInteractive && !(await read($, hinted))) {
+      await update($, hinted, () => true)
+      $.ui.toast(HINT_TEXT, { timeoutMs: 8000 })
+    }
 
     return next(e)
   })
@@ -68,15 +74,20 @@ export const register: Register = on => {
       const [g, ep] = await Promise.all([read($, collapsed), read($, epoch)])
       await update($, member, cur => ({ epoch: ep, open: !isExpanded(g, openOf(cur, ep)) }))
     }
-    const line = summaryLine(e.props, e.viewport?.columns, open)
+    const call = e.props
+    const segments = open ? expandedSegments(call, e.viewport?.columns) : collapsedSegments(call, e.viewport?.columns)
     const row = (
       <Button key={`collapse-tools:${id}`} plain onPress={toggle}>
-        <Text dimColor>{line}</Text>
+        {segments.map(segment => (
+          <Text color={segment.color} bold={segment.bold} dimColor={segment.dim}>
+            {segment.text}
+          </Text>
+        ))}
       </Button>
     )
-    if (!open) return row
+    // Expanded: the header replaces the engine's row. Tools whose own row may carry more keep it below.
+    if (!open || !keepsEngineRow(call.tool)) return row
 
-    // Expanded: the header line stays (click to collapse again), the engine's own row follows.
     return (
       <Box flexDirection="column">
         {row}

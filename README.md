@@ -1,33 +1,35 @@
 <div align="center">
   <img src=".claude/skills/collapse-tools/.claude-plugin/icon.png" alt="Collapse Tools icon" width="120" height="120">
   <h1>Collapse Tools for Claude Code</h1>
-  <p>Every tool-call row in the transcript as one dim line.</p>
+  <p>Every tool-call row in the transcript as one line.</p>
 
   [![CI](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml) ![Version](https://img.shields.io/github/package-json/v/0xnicholasy/claude-mod-collapse-tools?filename=.claude%2Fskills%2Fcollapse-tools%2F.claude-plugin%2Fplugin.json&label=version) [![License](https://img.shields.io/github/license/0xnicholasy/claude-mod-collapse-tools)](LICENSE) [![Stars](https://img.shields.io/github/stars/0xnicholasy/claude-mod-collapse-tools?style=flat)](https://github.com/0xnicholasy/claude-mod-collapse-tools/stargazers)
 
   <a href="#installation">Install</a> · <a href="#usage">Usage</a> · <a href="#how-it-works">How it works</a>
 </div>
 
-Collapse Tools is a Claude Code plugin that draws each tool-call row in the transcript as one dim line, to save screen rows. Click a line to expand that call, or run `/collapse-tools` to switch every call between one-line and full rows.
+Collapse Tools is a Claude Code plugin that draws each tool-call row in the transcript as one line, to save screen rows. Click a row to expand that call, or run `/collapse-tools` to switch every call between one-line and full rows.
 
-Collapsed rows:
-
-```
-> Bash(npm run check) . done
-> github - create_issue (MCP) . running
-```
-
-An expanded call keeps a `v` header above the engine's normal row and result:
+Collapsed rows (the `[+]` is dim, the tool name is bold and colored by status, the argument is dim):
 
 ```
-v Bash(npm run check) . done
+[+] Bash  npm run check
+[+] github:create_issue  Fix the login redirect                          running
+[+] Edit  /src/app.ts                                                      error
+```
+
+An expanded call replaces the engine's row with one header, then the engine draws the result as usual:
+
+```
+[-] Bash  npm run check  timeout: 120000, description: Run the full gate
 ```
 
 ## Features
 
-- One-line rows. Each call reads `> Tool(arg) . status`, cut to the terminal width. Status is `running`, `error`, `interrupted` or `done`.
-- Readable names. An MCP tool `mcp__server__tool` shows as `server - tool (MCP)`.
-- Click to expand. Clicking a line expands that call. The `v Tool(arg) . status` header stays, and clicking it collapses the call again.
+- One-line rows. Each call reads `[+] Name  arg`. The name is colored by status: green when done, red on error, yellow while running, gray when interrupted. A status word (`running`, `error`, `interrupted`) is right-aligned at the end of the row, in the same color; a done call shows none.
+- Readable names. An MCP tool `mcp__server__tool` shows as `server:tool`.
+- Click hint. `[+]` marks a row you can click. Once per session, on start, a toast says "collapse-tools: click a [+] row to expand, /collapse-tools to toggle all".
+- Click to expand. Clicking a row expands that call into a single `[-]` header with the full input; clicking the header collapses it again.
 - `/collapse-tools` command. Switches the default for all calls and clears per-call toggles. The choice is saved across sessions.
 - Collapsed results. The result block of a collapsed call is not drawn.
 - Tool groups such as `Read 3 files` are left to the engine.
@@ -71,20 +73,24 @@ Tool calls are collapsed by default. Two controls change that:
 | `/collapse-tools` | Flips the default for all calls (collapsed to expanded, or back) and clears every per-call toggle. Replies "Tool calls collapsed to one line." or "Tool calls expanded." The new default is saved. |
 | Click a line | Toggles that one call against the current default. Not saved across sessions. |
 
-A per-call toggle beats the default until the next `/collapse-tools`. The status shown is `interrupted` if the call was aborted, otherwise `error` if it failed, otherwise `running` while it runs, otherwise `done`.
+A per-call toggle beats the default until the next `/collapse-tools`. The status is `interrupted` if the call was aborted, otherwise `error` if it failed, otherwise `running` while it runs, otherwise `done`.
 
-The argument shown is the first non-empty string among the call's `command`, `file_path`, `path`, `pattern`, `description`, `title` and `op` fields. If none is present, the first string field of the input is used. Whitespace is collapsed and the argument is cut to 60 characters with `...`. A line is cut to the terminal width, or to 100 characters when the width is unknown.
+The collapsed argument is the first non-empty string among the call's `command`, `file_path`, `path`, `pattern`, `description`, `title` and `op` fields. If none is present, the first string field of the input is used. Whitespace is collapsed and the argument is cut with `...` so the row fits the terminal width less 4 columns (100 columns when the width is unknown).
+
+The expanded header shows that same field in full (whitespace collapsed), then the input's other fields as a dim `key: value, key: value` list. The header after the tool name is capped at 6 times the terminal width in characters (about 6 lines) and ends with `...` where it is cut. A non-done status word follows the header.
+
+Tools that keep the engine's row: for `Agent`, `Task`, `AskUserQuestion`, `TodoWrite` and `ExitPlanMode` the expanded view is the header followed by the engine's own row, because that row may carry more than `Name(arg)`. Every other tool, including `Edit` and `Write` (their diff is part of the tool's output, which the result block draws), shows the header alone.
 
 ## How it works
 
-The plugin registers five hooks in `.claude/skills/collapse-tools/hooks/register.tsx`. The pure logic (argument picking, status, line building, expand rule) is in `hooks/summary.ts`.
+The plugin registers five hooks in `.claude/skills/collapse-tools/hooks/register.tsx`. The pure logic (argument picking, status, row building, expand rule) is in `hooks/summary.ts`.
 
 | Hook | What it does |
 |---|---|
-| `session.start` | Loads the saved default from the plugin store and registers the `/collapse-tools` command. |
+| `session.start` | Loads the saved default from the plugin store, registers the `/collapse-tools` command and, once per session, shows the click-hint toast. |
 | `turn.start` | Reloads the saved default. `/clear` resets the atoms and no `session.start` follows, so this restores the choice on the next turn. |
 | `command.run` (`collapse-tools`) | Flips the default, increments the epoch (which invalidates per-call toggles), saves the default to the store and returns the reply text. |
-| `ui.render` (`ToolUse`) | Replaces the call row with a dim button line. When the call is expanded, draws the `v` header and then the engine's own row. |
+| `ui.render` (`ToolUse`) | Replaces the call row with a button line. Collapsed it is the `[+]` row; expanded it is the `[-]` header, followed by the engine's own row for the tools listed above. |
 | `ui.render` (`ToolResult`) | Draws the engine's result when the call is expanded. Otherwise returns a `Box` with `display="none"`. |
 
 State atoms (declared in `types/index.d.ts` under `collapse-tools`):
@@ -93,6 +99,7 @@ State atoms (declared in `types/index.d.ts` under `collapse-tools`):
 |---|---|---|
 | `collapsed` | boolean | The default for all calls. Starts `true`. |
 | `epoch` | number | Counter bumped by `/collapse-tools`. A toggle written under an older epoch counts as no toggle. |
+| `hinted` | boolean | True once the startup toast was shown. Starts `false`. |
 | `overrides` | family of `{ epoch, open }` | Per-call toggle, keyed by `tool_use_id`. A click redraws only that call. |
 
 Only `collapsed` is persisted, under the plugin store key `collapsed`. If a store read or write fails, the error goes to the debug log and the in-session value is kept. Render hooks never write state; writes happen in the click handler and in `command.run`.
@@ -125,8 +132,11 @@ npm run check
 
 ## Known limitations
 
-- Not verified in a live session: how the collapsed result block spacing looks, and whether a click lands on the line on every surface.
-- The collapsed result is a Box with display none, so a margin the engine puts around results may still show.
+- Not verified in a live session: how the rows look, whether a click lands on the row on every surface, and whether the theme keys used for status colors (`success`, `error`, `warning`, `inactive`) read as green, red, yellow and gray in every theme.
+- A collapsed result is a Box with `display="none"`, the only draw-nothing option the API documents (a hook must return an element; it cannot return null). A margin the engine puts around each transcript message cannot be changed from a plugin, so some spacing between consecutive collapsed rows may remain.
+- Which tools keep the engine's row is a judgment from the API types, not from a live check. A tool not listed whose engine row carries extra detail loses that detail when expanded.
+- Expanded input is shown on one line per field set (whitespace collapsed), so multi-line commands lose their line breaks.
+- Colors and the toast need a surface that draws them; only the terminal surface is assumed.
 
 ## License
 

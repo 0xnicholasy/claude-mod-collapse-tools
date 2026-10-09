@@ -1,10 +1,23 @@
 import { expect, test } from 'claude-code/testing'
-import { formatToolName, isExpanded, pickArg, statusOf, summaryLine, truncate } from './summary'
+import {
+  EXPANDED_LINES,
+  STATUS_COLOR,
+  collapsedSegments,
+  expandedSegments,
+  formatToolName,
+  isExpanded,
+  keepsEngineRow,
+  pickArg,
+  segmentsText,
+  statusOf,
+  truncate,
+} from './summary'
 
 const call = { tool: 'Bash', input: { command: 'ls -la' }, isRunning: false, isErrored: false, isInterrupted: false }
+const nameOf = (segments: ReturnType<typeof collapsedSegments>) => segments[1]
 
-test('MCP tool names read server - tool (MCP); others are kept', () => {
-  expect(formatToolName('mcp__github__create_issue')).toBe('github - create_issue (MCP)')
+test('MCP tool names read server:tool; others are kept', () => {
+  expect(formatToolName('mcp__github__create_issue')).toBe('github:create_issue')
   expect(formatToolName('Bash')).toBe('Bash')
 })
 
@@ -15,15 +28,9 @@ test('the arg is the most telling field, with whitespace collapsed', () => {
   expect(pickArg(null)).toBe('')
 })
 
-test('truncation ends with an ellipsis and fits the width', () => {
-  expect(truncate('abcdefghij', 6)).toBe('abc...')
-  expect(pickArg({ command: 'x'.repeat(200) })).toHaveLength(60)
-  expect(summaryLine(call, 10)).toHaveLength(10)
-})
-
 test('truncate handles tiny widths and never splits a surrogate pair', () => {
+  expect(truncate('abcdefghij', 6)).toBe('abc...')
   expect(truncate('abcdef', 3)).toBe('abc')
-  expect(truncate('abcdef', 2)).toBe('ab')
   expect(truncate('abcdef', 0)).toBe('')
   expect(truncate('\u{1F600}\u{1F600}\u{1F600}', 2)).toBe('\u{1F600}\u{1F600}')
   expect(truncate('\u{1F600}abcdefgh', 6)).toBe('\u{1F600}ab...')
@@ -36,11 +43,46 @@ test('status precedence is interrupted, error, running, done', () => {
   expect(statusOf(call)).toBe('done')
 })
 
-test('the summary line is dim ASCII with a marker and falls back to 100 columns', () => {
-  expect(summaryLine(call, undefined)).toBe('> Bash(ls -la) . done')
-  expect(summaryLine(call, 0)).toBe('> Bash(ls -la) . done')
-  expect(summaryLine(call, -5)).toBe('> Bash(ls -la) . done')
-  expect(summaryLine(call, 100, true)).toBe('v Bash(ls -la) . done')
+test('the name is bold and colored by status: done green, error red, running yellow, interrupted gray', () => {
+  expect(STATUS_COLOR).toEqual({ done: 'success', error: 'error', running: 'warning', interrupted: 'inactive' })
+  expect(nameOf(collapsedSegments(call, 80))).toEqual({ text: 'Bash', color: 'success', bold: true })
+  expect(nameOf(collapsedSegments({ ...call, isErrored: true }, 80))?.color).toBe('error')
+  expect(nameOf(collapsedSegments({ ...call, isRunning: true }, 80))?.color).toBe('warning')
+  expect(nameOf(collapsedSegments({ ...call, isInterrupted: true }, 80))?.color).toBe('inactive')
+})
+
+test('a done row shows no status word; other statuses end the row in their color', () => {
+  expect(segmentsText(collapsedSegments(call, 80))).toBe('[+] Bash  ls -la')
+  const running = collapsedSegments({ ...call, isRunning: true }, 80)
+  expect(segmentsText(running).endsWith('running')).toBe(true)
+  expect(running[running.length - 1]).toMatchObject({ color: 'warning' })
+  // Right-aligned to the width less the margin.
+  expect(segmentsText(running)).toHaveLength(76)
+})
+
+test('the collapsed row is one line: the arg is cut to fit and the width falls back to 100', () => {
+  const long = { ...call, input: { command: 'x'.repeat(300) } }
+  expect(segmentsText(collapsedSegments(long, 50))).toHaveLength(46)
+  expect(segmentsText(collapsedSegments(long, undefined))).toHaveLength(96)
+  expect(segmentsText(collapsedSegments(long, 0))).toHaveLength(96)
+  expect(segmentsText(collapsedSegments({ ...long, isErrored: true }, 50))).toHaveLength(46)
+  expect(segmentsText(collapsedSegments(long, 6)).length).toBeLessThanOrEqual(2)
+})
+
+test('the expanded header shows the full input, then the other fields dim, capped at the limit', () => {
+  const cmd = 'y'.repeat(150)
+  const open = expandedSegments({ ...call, input: { command: cmd, timeout: 5000 } }, 80)
+  expect(segmentsText(open)).toBe(`[-] Bash  ${cmd}  timeout: 5000`)
+  expect(open[open.length - 1]).toMatchObject({ dim: true })
+
+  const huge = expandedSegments({ ...call, input: { command: 'z'.repeat(5000), description: 'd'.repeat(500) } }, 80)
+  expect(segmentsText(huge).length).toBeLessThanOrEqual(80 * EXPANDED_LINES)
+  expect(segmentsText(huge).endsWith('...')).toBe(true)
+})
+
+test('only the tools whose engine row may carry more keep it', () => {
+  for (const tool of ['Agent', 'AskUserQuestion', 'TodoWrite', 'ExitPlanMode']) expect(keepsEngineRow(tool)).toBe(true)
+  for (const tool of ['Bash', 'Edit', 'Write', 'Read', 'mcp__a__b']) expect(keepsEngineRow(tool)).toBe(false)
 })
 
 test('a per-call override beats the global default', () => {

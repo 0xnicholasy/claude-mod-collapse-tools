@@ -194,3 +194,25 @@ test('the summaries option off shows the raw command until the saved value says 
   await $.command.run({ ...RUN, args: 'summary on' })
   expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeDefined()
 })
+
+test('a saved summaries=false is loaded at session.start and the collapsed row shows the raw command', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  on('session.start', async (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', async () => ({ value: { command: 'collapse-tools' } }))
+  on('store.get', async (_$, e) => ({ value: e.key === 'summaries' ? false : undefined }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: false })
+  const use = await mountCall($, 'Bash', 'toolu_12', GIT_CALL)
+  expect(await use.find({ text: '[+] Bash  git status && git log -1' })).toBeDefined()
+  expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeUndefined()
+})
+
+test('a saved summaries=false is reloaded at turn.start when session.start did not run (the /clear path)', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  on('turn.start', async (_$, e) => ({ turnId: e.turnId }))
+  on('store.get', async (_$, e) => ({ value: e.key === 'summaries' ? false : undefined }))
+  const use = await mountCall($, 'Bash', 'toolu_13', GIT_CALL)
+  expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeDefined()
+  await $.turn.start({ text: 'hello', turnId: 'turn_1' })
+  expect(await use.find({ text: '[+] Bash  git status && git log -1' })).toBeDefined()
+  expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeUndefined()
+})

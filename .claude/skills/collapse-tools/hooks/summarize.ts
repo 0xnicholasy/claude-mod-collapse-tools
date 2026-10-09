@@ -7,7 +7,10 @@ export const MAX_SUMMARY = 60
 // description of the task"; Monitor: "Short human-readable description of what you are monitoring").
 // Tools whose `description` is a task body or means something else (TaskCreate, TaskUpdate, MCP tools)
 // are left out.
-const DESCRIBED_TOOLS: ReadonlySet<string> = new Set(['Bash', 'Agent', 'Monitor'])
+// 'Task' is the Agent tool's older name (matching KEEP_ENGINE_ROW in summary.ts).
+const DESCRIBED_TOOLS: ReadonlySet<string> = new Set(['Bash', 'Agent', 'Task', 'Monitor'])
+
+const TRAILING = /[\s.,;:!?'‘’]+$/
 
 const cut = (text: string, max: number): string => {
   const chars = Array.from(text)
@@ -16,20 +19,23 @@ const cut = (text: string, max: number): string => {
 
 export function cleanSummary(text: string): string {
   const flat = text
-    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/\p{Cf}/gu, '')
     .replace(/["`“”]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^['‘’]+/, '')
-    .replace(/[\s.,;:!?'‘’]+$/, '')
-  return cut(flat, MAX_SUMMARY).trimEnd()
+    .replace(TRAILING, '')
+  return cut(flat, MAX_SUMMARY).replace(TRAILING, '')
 }
 
+// unknown: `saved` is an unvalidated store read and `option` is a plugin-option union, so both are narrowed here.
 export const resolveSummaries = (saved: unknown, option: unknown): boolean =>
   typeof saved === 'boolean' ? saved : typeof option === 'boolean' ? option : true
 
 // The purpose line the model wrote for a call, or null when the tool is not on the allowlist or the
 // input carries no usable description.
+// unknown: the engine types a ToolUse input as unknown; it is narrowed to a plain object below.
 export function describe(tool: string, input: unknown): string | null {
   if (!DESCRIBED_TOOLS.has(tool)) return null
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null

@@ -8,6 +8,10 @@ test('cleanSummary strips quotes and trailing punctuation, collapses whitespace 
   // Control and format characters become spaces, so no escape code or bidi override reaches the row.
   expect(cleanSummary('\u001b[31mCheck\u202e repo\u0007 status\u200b')).toBe('[31mCheck repo status')
   expect(cleanSummary('\u001b\u202e\u0007')).toBe('')
+  expect(cleanSummary('Che\u200bck re\u202epo')).toBe('Check repo')
+  expect(cleanSummary('a\u0007b')).toBe('a b')
+  expect(cleanSummary(`${'x'.repeat(58)}, tail`)).toBe('x'.repeat(58))
+  expect(cleanSummary(`${'x'.repeat(59)}. tail`)).toBe('x'.repeat(59))
   const capped = cleanSummary('word '.repeat(40))
   expect(Array.from(capped).length).toBeLessThanOrEqual(MAX_SUMMARY)
   expect(capped.endsWith(' ')).toBe(false)
@@ -26,6 +30,7 @@ test('describe returns the cleaned description for Bash, Agent and Monitor', () 
   expect(describe('Bash', { command: 'git status', description: '"Show git status head."' })).toBe('Show git status head')
   expect(describe('Agent', { prompt: 'long task body', description: '  Audit\nthe auth flow ' })).toBe('Audit the auth flow')
   expect(describe('Monitor', { command: 'tail -f x', description: 'Watch build output' })).toBe('Watch build output')
+  expect(describe('Task', { prompt: 'p', description: 'Audit the auth flow' })).toBe('Audit the auth flow')
   expect(describe('Bash', { description: 'x'.repeat(200) })).toHaveLength(MAX_SUMMARY)
 })
 

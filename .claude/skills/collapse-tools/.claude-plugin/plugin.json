@@ -26,7 +26,7 @@
     "summaries": {
       "type": "boolean",
       "title": "Row summaries",
-      "description": "Show the description the model wrote for a call (Bash, Agent) instead of the raw argument on collapsed rows. Default on.",
+      "description": "Show the description the model wrote for a call (Bash, Agent, Monitor) instead of the raw argument on collapsed rows. Default on.",
       "default": true
     }
   }

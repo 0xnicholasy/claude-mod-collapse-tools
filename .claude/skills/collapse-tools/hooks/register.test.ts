@@ -145,6 +145,16 @@ function stubCalls(on: On, reply: () => { value: ModelCompleteResult }) {
   return { ids, requests }
 }
 
+// Stubs only the model beneath the plugin, recording each request.
+function stubModel(on: On) {
+  const requests: ModelCompleteInput[] = []
+  on('model.complete', async (_$, e) => {
+    requests.push(e)
+    return answer('Run a command')
+  })
+  return { requests }
+}
+
 test('a Bash call is summarized by one Haiku request and the collapsed row shows the summary', async ($, on) => {
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
   const { ids, requests } = stubCalls(on, () => answer('"Check repo status and fetch origin."'))
@@ -240,6 +250,36 @@ test('a completion the engine refuses (rejects) leaves the raw arg and never thr
   })
   const out = await $.tool.call({ tool: 'Bash', command: 'ls' })
   expect(out.result).toEqual(bashResult)
+  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
+  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
+})
+
+test('a tool that rejects beneath the hook still rejects the call, and the summary request is still made', async ($, on) => {
+  on('tool.call', async () => {
+    throw new Error('tool failed')
+  })
+  const { requests } = stubModel(on)
+  let caught: unknown
+  const outcome = await $.tool.call({ tool: 'Bash', command: 'ls' }).then(
+    () => 'resolved',
+    (error: unknown) => {
+      caught = error
+      return 'rejected'
+    },
+  )
+  expect(outcome).toBe('rejected')
+  // The harness replaces a throwing stub with its own error, so the thrown object cannot be compared
+  // here; its identity is asserted on awaitBoth in summarize.test.ts.
+  expect(caught instanceof Error).toBe(true)
+  expect(requests).toHaveLength(1)
+})
+
+test('a reply that cleans to nothing keeps the raw arg on the collapsed row', async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  const { ids, requests } = stubCalls(on, () => answer("  ''. "))
+  const out = await $.tool.call({ tool: 'Bash', command: 'ls' })
+  expect(out.result).toEqual(bashResult)
+  expect(requests).toHaveLength(1)
   const [use] = await mountTool($, 'Bash', ids[0] ?? '')
   expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
 })

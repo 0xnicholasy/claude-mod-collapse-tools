@@ -89,7 +89,7 @@ Tool calls are collapsed by default. These controls change that:
 
 Completed-call color (marks a call that completed successfully; running is yellow, error red, interrupted gray): `<name>` is black, red, green, yellow, blue, magenta, cyan, white, gray (or grey), `claude`, or a `...Bright` variant of the basic names; `#rrggbb` also works. The color in effect is the one saved by `/collapse-tools color`, else the `doneColor` plugin option (Completed call color; default `white`), else `white`. An invalid option value falls back to the default.
 
-Haiku summaries: the setting in effect is the one saved by `/collapse-tools summary on|off`, else the `summaries` plugin option (Haiku summaries; default on), else on. When on, each tool call (every tool, MCP tools included) triggers one Haiku request made beside the tool, and the collapsed row shows `[+] Name  <summary>` in place of the argument once the reply arrives. The label is at most 8 words, cleaned of quotes and trailing punctuation and cut to 60 characters. A repeated call with the same tool and the same input reuses the earlier label, so it costs one request. If the request fails or times out (4 seconds) the row keeps the raw argument and one line goes to the debug log. With summaries off, rows show the raw argument even if a label was already made.
+Haiku summaries: the setting in effect is the one saved by `/collapse-tools summary on|off`, else the `summaries` plugin option (Haiku summaries; default on), else on. When on, each tool call (every tool, MCP tools included) triggers one Haiku request made beside the tool, and the collapsed row shows `[+] Name  <summary>` in place of the argument once the reply arrives. The label is asked to be at most 8 words, cleaned of quotes, control characters and trailing punctuation, and cut to 60 characters. Summaries show only on collapsed rows (`/collapse-tools` toggles all); an expanded row shows the raw input. A repeated call with the same tool and the same input reuses the earlier label, so it costs one request. If the request fails or times out (4 seconds) the row keeps the raw argument and one line goes to the debug log. With summaries off, rows show the raw argument even if a label was already made.
 
 A per-call toggle beats the default until the next `/collapse-tools`. The status is `interrupted` if the call was aborted, otherwise `error` if it failed, otherwise `running` while it runs, otherwise `done`.
 
@@ -129,7 +129,7 @@ State atoms (declared in `types/index.d.ts` under `collapse-tools`):
 
 ## Data and privacy
 
-- The plugin makes no network calls of its own. With summaries on, it sends the tool name and a compact copy of the tool input (strings cut at 400 characters, arrays and objects cut at 400 characters of JSON) to Haiku. Summaries are generated from the tool input sent through the session's own API client, same provider as the session. Turn summaries off with `/collapse-tools summary off` or the `summaries` option if you do not want tool inputs in a second model request.
+- The plugin makes no network calls of its own. With summaries on, it sends the tool name and a compact copy of the tool input (strings cut at 400 characters, arrays and objects cut at 400 characters of JSON) to Haiku. Summaries are generated from the tool input sent through the session's own API client, same provider as the session. Inputs, including any secrets in Bash commands, are sent in the Haiku request. The derived label is kept in session state. Turn summaries off with `/collapse-tools summary off` or the `summaries` option if you do not want tool inputs in a second model request.
 - The only persisted data is the default choice, the done color and the summaries setting, stored under three plugin store keys (`collapsed`, `doneColor`, `summaries`) when you run `/collapse-tools`, `/collapse-tools color` or `/collapse-tools summary`.
 - Per-call toggles, the epoch, the summaries and the summary cache live in session state and are not written to disk by the plugin.
 - Apart from the Haiku request above, tool-call inputs are used only to build the one-line row on screen. The plugin does not store them or log them.
@@ -168,6 +168,8 @@ npm run check
 - Summaries are session-only: they are not saved, so a resumed session shows raw arguments for earlier calls.
 - Not verified in a live session: the real Haiku reply quality and latency, and how `$.model.complete` behaves under every provider. Tests stub the model.
 - Summaries are written by a small model and can be wrong or vague; the expanded header shows the real input.
+- A summary is model output steered by the tool input, so it can mislabel a call; open the row (`[-]`) to see the real input.
+- Read and other calls the engine groups (e.g. `Read 1 file`) have no plugin row, so they get no summary.
 - Colors and the toast need a surface that draws them; only the terminal surface is assumed.
 
 ## License

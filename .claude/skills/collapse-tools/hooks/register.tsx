@@ -125,7 +125,9 @@ async function summarizeCall(
   $: EngineInterface,
   tool: string,
   id: string,
+  // unknown: the tool.call event carries the model's arbitrary JSON arguments beside its own keys.
   event: Readonly<Record<string, unknown>>,
+  // unknown: the plugin option is untyped; resolveSummaries accepts only a boolean.
   option: unknown,
 ): Promise<void> {
   try {

@@ -8,13 +8,13 @@ const MIN_ARG = 4
 // The expanded header may take about this many terminal lines of text.
 export const EXPANDED_LINES = 6
 // One extra `key: value` is cut to this many characters before the whole list is capped.
-const MAX_EXTRA_VALUE = 80
+const MAX_EXTRA_VALUE = 40
 
 export const MARKER_CLOSED = '[+]'
 export const MARKER_OPEN = '[-]'
 
 // Shown once per session at start, so the clickable rows are discoverable.
-export const HINT_TEXT = 'collapse-tools: click a [+] row to expand, /collapse-tools to toggle all'
+export const HINT_TEXT = 'click a [+] row to expand, /collapse-tools to toggle all'
 
 // Input fields that name what a call works on, most telling first.
 const ARG_FIELDS = ['command', 'file_path', 'path', 'pattern', 'description', 'title', 'op'] as const
@@ -108,25 +108,18 @@ export function pickArg(input: unknown): string {
 }
 
 // unknown: the values of a tool input are whatever JSON the model sent.
-function show(value: unknown): string {
-  if (typeof value === 'string') return squash(value)
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  try {
-    return squash(JSON.stringify(value) ?? '')
-  } catch {
-    return ''
-  }
-}
-
-// Every field but `skip` as `key: value, key: value`; empty values are left out.
 function extraFields(input: unknown, skip: string | undefined): string {
   const record = asRecord(input)
   if (record === null) return ''
   const parts: string[] = []
   for (const [key, value] of Object.entries(record)) {
     if (key === skip) continue
-    const text = show(value)
-    if (text !== '') parts.push(`${key}: ${truncate(text, MAX_EXTRA_VALUE)}`)
+    if (typeof value === 'string') {
+      const text = squash(value)
+      if (text !== '') parts.push(`${key}: ${truncate(text, MAX_EXTRA_VALUE)}`)
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      parts.push(`${key}: ${String(value)}`)
+    }
   }
   return parts.join(', ')
 }

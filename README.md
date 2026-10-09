@@ -30,7 +30,7 @@ One expanded row (the header replaces the engine's row; the result is drawn as u
 
 - One-line rows. Each call reads `[+] Name  arg`. The name of a done call is a muted sage (`#7d9a83`, not bold) that you can change; a running call is yellow, an error red and an interrupted call gray, all three bold. A status word (`running`, `error`, `interrupted`) is right-aligned at the end of the row, in the same color; a done call shows none.
 - Readable names. An MCP tool `mcp__server__tool` shows as `server:tool`.
-- Click hint. `[+]` marks a row you can click. Once per session, on start, a toast says "collapse-tools: click a [+] row to expand, /collapse-tools to toggle all".
+- Click hint. `[+]` marks a row you can click. Once per session, on start, a toast says "click a [+] row to expand, /collapse-tools to toggle all".
 - Click to expand. Clicking a row expands that call into a single `[-]` header with the full input; clicking the header collapses it again.
 - `/collapse-tools` command. Switches the default for all calls and clears per-call toggles. The choice is saved across sessions.
 - Pickable done color. `/collapse-tools color <name|#hex|reset>` or the `doneColor` option.

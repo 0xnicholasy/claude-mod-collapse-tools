@@ -83,7 +83,8 @@ test('the startup hint toasts once per session, and only for an interactive sess
   expect(toasts).toEqual([])
   await $.session.start(start)
   await $.session.start(start)
-  expect(toasts).toEqual([HINT_TEXT])
+  expect(toasts).toEqual(['click a [+] row to expand, /collapse-tools to toggle all'])
+  expect(HINT_TEXT.startsWith('collapse-tools')).toBe(false)
 })
 
 test('done color: saved beats the option, and the done row renders with it', { options: { doneColor: 'cyan' } }, async ($, on) => {

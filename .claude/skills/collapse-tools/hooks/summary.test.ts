@@ -88,6 +88,19 @@ test('the expanded header shows the full input, then the other fields dim, cappe
   expect(segmentsText(huge).endsWith('...')).toBe(true)
 })
 
+test('the expanded header skips array and object fields and shows scalar extras', () => {
+  const input = { title: 'plan', op: 'set', nodes: [{ title: 'a' }], meta: { k: 1 } }
+  const text = segmentsText(expandedSegments({ ...call, input }, 80))
+  expect(text).toBe('[-] Bash  plan  op: set')
+  expect(text).not.toContain('nodes')
+  expect(text).not.toContain('meta')
+})
+
+test('a long string extra is single-line and cut at 40 code points', () => {
+  const text = segmentsText(expandedSegments({ ...call, input: { command: 'ls', note: `a\n${'b'.repeat(100)}` } }, 80))
+  expect(text).toBe(`[-] Bash  ls  note: a ${'b'.repeat(35)}...`)
+})
+
 test('only the tools whose engine row may carry more keep it', () => {
   for (const tool of ['Agent', 'AskUserQuestion', 'TodoWrite', 'ExitPlanMode']) expect(keepsEngineRow(tool)).toBe(true)
   for (const tool of ['Bash', 'Edit', 'Write', 'Read', 'mcp__a__b']) expect(keepsEngineRow(tool)).toBe(false)

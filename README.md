@@ -8,9 +8,11 @@
   <a href="#installation">Install</a> · <a href="#usage">Usage</a> · <a href="#how-it-works">How it works</a>
 </div>
 
-Collapse Tools is a Claude Code plugin that draws each tool-call row in the transcript as one line, to save screen rows. Click a row to expand that call, or run `/collapse-tools` to switch every call between one-line and full rows.
+Collapse Tools is a Claude Code plugin that draws each tool-call row in the transcript as one line, `[+] Name  arg`, to save screen rows. Click a row to expand it into a single `[-]` header followed by the normal output, or run `/collapse-tools` to toggle all calls at once. A toast at session start (once) tells you how. The tool name of a finished call is a muted sage by default, and you can change that color.
 
-Collapsed rows (the `[+]` is dim, the tool name is bold and colored by status, the argument is dim):
+## What it looks like
+
+Collapsed rows: done, running and error (the `[+]` is dim, the argument is dim, a problem name is bold):
 
 ```
 [+] Bash  npm run check
@@ -18,7 +20,7 @@ Collapsed rows (the `[+]` is dim, the tool name is bold and colored by status, t
 [+] Edit  /src/app.ts                                                      error
 ```
 
-An expanded call replaces the engine's row with one header, then the engine draws the result as usual:
+One expanded row (the header replaces the engine's row; the result is drawn as usual below it):
 
 ```
 [-] Bash  npm run check  timeout: 120000, description: Run the full gate
@@ -26,11 +28,12 @@ An expanded call replaces the engine's row with one header, then the engine draw
 
 ## Features
 
-- One-line rows. Each call reads `[+] Name  arg`. The name is colored by status: green when done, red on error, yellow while running, gray when interrupted. A status word (`running`, `error`, `interrupted`) is right-aligned at the end of the row, in the same color; a done call shows none.
+- One-line rows. Each call reads `[+] Name  arg`. The name of a done call is a muted sage (`#7d9a83`, not bold) that you can change; a running call is yellow, an error red and an interrupted call gray, all three bold. A status word (`running`, `error`, `interrupted`) is right-aligned at the end of the row, in the same color; a done call shows none.
 - Readable names. An MCP tool `mcp__server__tool` shows as `server:tool`.
 - Click hint. `[+]` marks a row you can click. Once per session, on start, a toast says "collapse-tools: click a [+] row to expand, /collapse-tools to toggle all".
 - Click to expand. Clicking a row expands that call into a single `[-]` header with the full input; clicking the header collapses it again.
 - `/collapse-tools` command. Switches the default for all calls and clears per-call toggles. The choice is saved across sessions.
+- Pickable done color. `/collapse-tools color <name|#hex|reset>` or the `doneColor` option.
 - Collapsed results. The result block of a collapsed call is not drawn.
 - Tool groups such as `Read 3 files` are left to the engine.
 
@@ -66,12 +69,15 @@ Uninstall with `claude plugin uninstall collapse-tools@claude-mods`.
 
 ## Usage
 
-Tool calls are collapsed by default. Two controls change that:
+Tool calls are collapsed by default. These controls change that:
 
 | Control | Effect |
 |---|---|
+| `/collapse-tools color <name\|#hex\|reset>` | Sets the color of the tool name of finished calls and saves it for future sessions. `reset` clears the saved color. An unknown color is rejected with a message; any other argument prints a usage line. |
 | `/collapse-tools` | Flips the default for all calls (collapsed to expanded, or back) and clears every per-call toggle. Replies "Tool calls collapsed to one line." or "Tool calls expanded." The new default is saved. |
 | Click a line | Toggles that one call against the current default. Not saved across sessions. |
+
+Done color: `<name>` is black, red, green, yellow, blue, magenta, cyan, white, gray (or grey), `claude`, or a `...Bright` variant of the basic names; `#rrggbb` also works. The color in effect is the one saved by `/collapse-tools color`, else the `doneColor` plugin option (Done color; default `#7d9a83`), else `#7d9a83`. An invalid option value falls back to the default.
 
 A per-call toggle beats the default until the next `/collapse-tools`. The status is `interrupted` if the call was aborted, otherwise `error` if it failed, otherwise `running` while it runs, otherwise `done`.
 
@@ -87,9 +93,9 @@ The plugin registers five hooks in `.claude/skills/collapse-tools/hooks/register
 
 | Hook | What it does |
 |---|---|
-| `session.start` | Loads the saved default from the plugin store, registers the `/collapse-tools` command and, once per session, shows the click-hint toast. |
-| `turn.start` | Reloads the saved default. `/clear` resets the atoms and no `session.start` follows, so this restores the choice on the next turn. |
-| `command.run` (`collapse-tools`) | Flips the default, increments the epoch (which invalidates per-call toggles), saves the default to the store and returns the reply text. |
+| `session.start` | Loads the saved default and done color from the plugin store, registers the `/collapse-tools` command and, once per session, shows the click-hint toast. |
+| `turn.start` | Reloads the saved default and, when unset, the done color. `/clear` resets the atoms and no `session.start` follows, so this restores the choice on the next turn. |
+| `command.run` (`collapse-tools`) | With `color ...`, sets or resets the done color. Otherwise flips the default, increments the epoch (which invalidates per-call toggles), saves the default to the store and returns the reply text. |
 | `ui.render` (`ToolUse`) | Replaces the call row with a button line. Collapsed it is the `[+]` row; expanded it is the `[-]` header, followed by the engine's own row for the tools listed above. |
 | `ui.render` (`ToolResult`) | Draws the engine's result when the call is expanded. Otherwise returns a `Box` with `display="none"`. |
 
@@ -100,14 +106,15 @@ State atoms (declared in `types/index.d.ts` under `collapse-tools`):
 | `collapsed` | boolean | The default for all calls. Starts `true`. |
 | `epoch` | number | Counter bumped by `/collapse-tools`. A toggle written under an older epoch counts as no toggle. |
 | `hinted` | boolean | True once the startup toast was shown. Starts `false`. |
+| `doneColorOverride` | string or null | The color saved by `/collapse-tools color`; null defers to the `doneColor` option. |
 | `overrides` | family of `{ epoch, open }` | Per-call toggle, keyed by `tool_use_id`. A click redraws only that call. |
 
-Only `collapsed` is persisted, under the plugin store key `collapsed`. If a store read or write fails, the error goes to the debug log and the in-session value is kept. Render hooks never write state; writes happen in the click handler and in `command.run`.
+`collapsed` and the done color are persisted, under the plugin store keys `collapsed` and `doneColor`. If a store read or write fails, the error goes to the debug log and the in-session value is kept. Render hooks never write state; writes happen in the click handler and in `command.run`.
 
 ## Data and privacy
 
 - The plugin makes no network calls.
-- The only persisted data is the default choice, stored under one plugin store key (`collapsed`) when you run `/collapse-tools`.
+- The only persisted data is the default choice and the done color, stored under two plugin store keys (`collapsed`, `doneColor`) when you run `/collapse-tools` or `/collapse-tools color`.
 - Per-call toggles and the epoch live in session state and are not written to disk by the plugin.
 - The plugin reads tool-call inputs only to build the one-line summary on screen. It does not store them, log them or send them anywhere.
 - It reads no credentials or environment variables, and does not read or write files or run processes.
@@ -132,6 +139,10 @@ npm run check
 
 ## Known limitations
 
+- Clicking a row needs a fullscreen terminal or the desktop app; elsewhere use `/collapse-tools`.
+- ctrl+o does not unfold these rows.
+- Some spacing may remain between consecutive collapsed rows (a transcript margin a plugin cannot change).
+- `Agent`, `Task`, `AskUserQuestion`, `TodoWrite` and `ExitPlanMode` keep the engine's row under the header when expanded.
 - Not verified in a live session: how the rows look, whether a click lands on the row on every surface, and whether the theme keys used for status colors (`success`, `error`, `warning`, `inactive`) read as green, red, yellow and gray in every theme.
 - A collapsed result is a Box with `display="none"`, the only draw-nothing option the API documents (a hook must return an element; it cannot return null). A margin the engine puts around each transcript message cannot be changed from a plugin, so some spacing between consecutive collapsed rows may remain.
 - Which tools keep the engine's row is a judgment from the API types, not from a live check. A tool not listed whose engine row carries extra detail loses that detail when expanded.

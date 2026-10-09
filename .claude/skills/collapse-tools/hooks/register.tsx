@@ -1,11 +1,15 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
+import { DONE_COLOR_STORE_KEY, resolveDoneColor, validColor } from './accent'
 import { HINT_TEXT, collapsedSegments, expandedSegments, isExpanded, keepsEngineRow } from './summary'
 
 const collapsed = atom({ plugin: 'collapse-tools', key: 'collapsed' } as const, true as boolean)
 const epoch = atom({ plugin: 'collapse-tools', key: 'epoch' } as const, 0)
 // True once the startup hint toast was shown, so it appears once per session.
 const hinted = atom({ plugin: 'collapse-tools', key: 'hinted' } as const, false as boolean)
+// The color set by `/collapse-tools color`, loaded from the plugin store at session start; null
+// defers to the plugin option `doneColor`.
+const doneColorOverride = atom({ plugin: 'collapse-tools', key: 'doneColorOverride' } as const, null as string | null)
 // Per-call override family: each member is addressed by tool_use_id, so a click redraws only that call.
 const overrideRef = { plugin: 'collapse-tools', key: 'overrides' } as const
 
@@ -16,6 +20,46 @@ const openOf = (entry: Override | undefined, current: number): boolean | undefin
   entry !== undefined && entry.epoch === current ? entry.open : undefined
 
 const STORE_KEY = 'collapsed'
+const USAGE = 'Usage: /collapse-tools (toggle all) | /collapse-tools color <name|#hex|reset>'
+const unknownColorText = (value: string): string =>
+  `Unknown color "${value}". Use a name (red, green, yellow, blue, magenta, cyan, white, gray, claude, or a ...Bright variant) or #rrggbb.`
+
+async function loadSavedColor($: EngineInterface): Promise<void> {
+  try {
+    const saved = validColor(await $.store.get(DONE_COLOR_STORE_KEY))
+    if (saved !== null) await update($, doneColorOverride, () => saved)
+  } catch (error) {
+    $.ui.log(`collapse-tools: color load failed ${String(error)}`, { to: 'debug' })
+  }
+}
+
+async function runColorCommand($: EngineInterface, value: string): Promise<{ text: string }> {
+  if (value.toLowerCase() === 'reset') {
+    await update($, doneColorOverride, () => null)
+    try {
+      await $.store.delete(DONE_COLOR_STORE_KEY)
+    } catch (error) {
+      $.ui.log(`collapse-tools: color store delete failed ${String(error)}`, { to: 'debug' })
+
+      return { text: 'Done color reset for this session only; the saved color could not be cleared.' }
+    }
+
+    return { text: 'Done color reset. The saved color is cleared for future sessions.' }
+  }
+  if (value === '') return { text: USAGE }
+  const color = validColor(value)
+  if (color === null) return { text: unknownColorText(value) }
+  await update($, doneColorOverride, () => color)
+  try {
+    await $.store.set(DONE_COLOR_STORE_KEY, color)
+  } catch (error) {
+    $.ui.log(`collapse-tools: color store write failed ${String(error)}`, { to: 'debug' })
+
+    return { text: `Done color set to ${color} for this session only; it could not be saved.` }
+  }
+
+  return { text: `Done color set to ${color}. Saved for future sessions.` }
+}
 
 // Loads the saved global choice; a store error or a non-boolean keeps the default (collapsed).
 async function loadSaved($: EngineInterface): Promise<void> {
@@ -29,12 +73,17 @@ async function loadSaved($: EngineInterface): Promise<void> {
   }
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // Effective color = saved `/collapse-tools color` (doneColorOverride) ?? plugin option ?? default.
+  const configColor = resolveDoneColor(null, options.doneColor)
+
   on('session.start', async ($, e, next) => {
     await loadSaved($)
+    await loadSavedColor($)
     await $.command.register({
       name: 'collapse-tools',
-      description: 'Toggle between one-line and full tool-call rows',
+      description: 'Toggle between one-line and full tool-call rows, or set the done color',
+      argumentHint: 'color <name|#hex|reset>',
     })
     if (e.isInteractive && !(await read($, hinted))) {
       await update($, hinted, () => true)
@@ -47,11 +96,17 @@ export const register: Register = on => {
   // The atoms reset on /clear and no session.start follows, so reload the saved choice on the next turn.
   on('turn.start', async ($, e, next) => {
     await loadSaved($)
+    // Atoms reset on /clear without a session.start, so reload the color when it is unset.
+    if ((await read($, doneColorOverride)) === null) await loadSavedColor($)
 
     return next(e)
   })
 
-  on('command.run', { command: 'collapse-tools' }, async $ => {
+  on('command.run', { command: 'collapse-tools' }, async ($, e) => {
+    const raw = e.args.trim()
+    const word = raw.toLowerCase()
+    if (word === 'color' || word.startsWith('color ')) return runColorCommand($, raw.slice('color'.length).trim())
+    if (raw !== '') return { text: USAGE }
     const next = !(await read($, collapsed))
     await update($, collapsed, () => next)
     await update($, epoch, n => n + 1)
@@ -68,14 +123,22 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const id = e.props.tool_use_id
     const member = { ...overrideRef, id }
-    const [global, current, entry] = await Promise.all([read($, collapsed), read($, epoch), read($, member)])
+    const [global, current, entry, override] = await Promise.all([
+      read($, collapsed),
+      read($, epoch),
+      read($, member),
+      read($, doneColorOverride),
+    ])
+    const doneColor = override ?? configColor
     const open = isExpanded(global, openOf(entry, current))
     const toggle = async () => {
       const [g, ep] = await Promise.all([read($, collapsed), read($, epoch)])
       await update($, member, cur => ({ epoch: ep, open: !isExpanded(g, openOf(cur, ep)) }))
     }
     const call = e.props
-    const segments = open ? expandedSegments(call, e.viewport?.columns) : collapsedSegments(call, e.viewport?.columns)
+    const segments = open
+      ? expandedSegments(call, e.viewport?.columns, doneColor)
+      : collapsedSegments(call, e.viewport?.columns, doneColor)
     const row = (
       <Button key={`collapse-tools:${id}`} plain onPress={toggle}>
         {segments.map(segment => (

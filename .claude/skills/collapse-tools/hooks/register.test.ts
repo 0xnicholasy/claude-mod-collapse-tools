@@ -65,7 +65,7 @@ test('an expanded Agent row keeps the engine row under the header; the status wo
   await use.press({ key: 'collapse-tools:toolu_2' })
   expect(await use.find({ text: '[-] Agent  ls' })).toBeDefined()
   expect(JSON.stringify(await use.drawn())).toContain('engine row')
-  expect(JSON.stringify(await use.drawn())).toContain('"color":"success"')
+  expect(JSON.stringify(await use.drawn())).toContain('"color":"#7d9a83"')
 })
 
 test('the startup hint toasts once per session, and only for an interactive session', async ($, on) => {
@@ -84,4 +84,43 @@ test('the startup hint toasts once per session, and only for an interactive sess
   await $.session.start(start)
   await $.session.start(start)
   expect(toasts).toEqual([HINT_TEXT])
+})
+
+test('done color: saved beats the option, and the done row renders with it', { options: { doneColor: 'cyan' } }, async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  on('session.start', async (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', async () => ({ value: { command: 'collapse-tools' } }))
+  on('store.get', async (_$, e) => ({ value: e.key === 'doneColor' ? 'magenta' : undefined }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: false })
+  const [use] = await mountTool($, 'Bash', 'toolu_3')
+  expect(JSON.stringify(await use.drawn())).toContain('"color":"magenta"')
+})
+
+test('done color: the plugin option applies when nothing is saved', { options: { doneColor: 'cyan' } }, async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
+  const [use] = await mountTool($, 'Bash', 'toolu_4')
+  expect(JSON.stringify(await use.drawn())).toContain('"color":"cyan"')
+})
+
+test('color subcommand: an invalid color is rejected without saving; a valid one is saved; reset clears the store', async ($, on) => {
+  const sets: Array<{ key: string; value: unknown }> = []
+  const deleted: string[] = []
+  on('store.set', async (_$, e) => {
+    sets.push({ key: e.key, value: e.value })
+    return { value: undefined }
+  })
+  on('store.delete', async (_$, e) => {
+    deleted.push(e.key)
+    return { value: undefined }
+  })
+  const bad = await $.command.run({ ...RUN, args: 'color orange' })
+  expect(bad.text).toContain('Unknown color "orange"')
+  expect(sets).toEqual([])
+  const ok = await $.command.run({ ...RUN, args: 'color #AABBCC' })
+  expect(ok.text).toBe('Done color set to #AABBCC. Saved for future sessions.')
+  expect(sets).toEqual([{ key: 'doneColor', value: '#AABBCC' }])
+  const reset = await $.command.run({ ...RUN, args: 'color reset' })
+  expect(reset.text).toContain('Done color reset')
+  expect(deleted).toEqual(['doneColor'])
+  expect((await $.command.run({ ...RUN, args: 'bogus' })).text).toContain('Usage: /collapse-tools')
 })

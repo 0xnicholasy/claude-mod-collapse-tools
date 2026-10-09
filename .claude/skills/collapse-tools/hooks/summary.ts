@@ -28,8 +28,11 @@ export type CallStatus = 'running' | 'error' | 'interrupted' | 'done'
 
 // Theme keys, so the colors follow the person's theme: success green, error red, warning yellow,
 // inactive gray.
+// Muted sage, dimmer than the terminal green the theme key `success` maps to.
+export const DEFAULT_DONE_COLOR = '#7d9a83'
+
 export const STATUS_COLOR: Readonly<Record<CallStatus, string>> = {
-  done: 'success',
+  done: DEFAULT_DONE_COLOR,
   error: 'error',
   running: 'warning',
   interrupted: 'inactive',
@@ -137,6 +140,12 @@ export function statusOf(call: Pick<CallView, 'isRunning' | 'isErrored' | 'isInt
 }
 
 // A finished call says nothing: its green name is the status.
+// Problems stay bold so they stand out; a finished call is plain.
+const isBold = (status: CallStatus): boolean => status !== 'done'
+
+const colorOf = (status: CallStatus, doneColor: string): string =>
+  status === 'done' ? doneColor : STATUS_COLOR[status]
+
 export const statusWord = (status: CallStatus): string => (status === 'done' ? '' : status)
 
 const validColumns = (columns: number | undefined): number =>
@@ -163,14 +172,18 @@ function clipSegments(segments: readonly Segment[], width: number): Segment[] {
 
 // `[+] Name  arg            status`: the marker dim, the name bold in the status color, the arg dim
 // and cut to fit, the status word right-aligned and only when the call is not done.
-export function collapsedSegments(call: CallView, columns: number | undefined): Segment[] {
+export function collapsedSegments(
+  call: CallView,
+  columns: number | undefined,
+  doneColor: string = DEFAULT_DONE_COLOR,
+): Segment[] {
   const width = Math.max(validColumns(columns) - MARGIN, 1)
   const status = statusOf(call)
-  const color = STATUS_COLOR[status]
+  const color = colorOf(status, doneColor)
   const word = statusWord(status)
   const segments: Segment[] = [
     { text: `${MARKER_CLOSED} `, dim: true },
-    { text: formatToolName(call.tool), color, bold: true },
+    { text: formatToolName(call.tool), color, bold: isBold(status) },
   ]
   const wordRoom = word === '' ? 0 : GAP + length(word)
   const argRoom = width - segmentsLength(segments) - GAP - wordRoom
@@ -185,14 +198,18 @@ export function collapsedSegments(call: CallView, columns: number | undefined): 
 
 // `[-] Name  full input  key: value, ...`: the most telling field in full, then the other fields dim.
 // The text after the name is capped at about EXPANDED_LINES lines of the terminal width.
-export function expandedSegments(call: CallView, columns: number | undefined): Segment[] {
+export function expandedSegments(
+  call: CallView,
+  columns: number | undefined,
+  doneColor: string = DEFAULT_DONE_COLOR,
+): Segment[] {
   const budget = validColumns(columns) * EXPANDED_LINES
   const status = statusOf(call)
-  const color = STATUS_COLOR[status]
+  const color = colorOf(status, doneColor)
   const word = statusWord(status)
   const segments: Segment[] = [
     { text: `${MARKER_OPEN} `, dim: true },
-    { text: formatToolName(call.tool), color, bold: true },
+    { text: formatToolName(call.tool), color, bold: isBold(status) },
   ]
   const field = pickArgField(call.input)
   const extras = extraFields(call.input, field?.key)

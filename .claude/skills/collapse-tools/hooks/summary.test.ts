@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import {
+  DEFAULT_DONE_COLOR,
   EXPANDED_LINES,
   STATUS_COLOR,
   collapsedSegments,
@@ -43,12 +44,19 @@ test('status precedence is interrupted, error, running, done', () => {
   expect(statusOf(call)).toBe('done')
 })
 
-test('the name is bold and colored by status: done green, error red, running yellow, interrupted gray', () => {
-  expect(STATUS_COLOR).toEqual({ done: 'success', error: 'error', running: 'warning', interrupted: 'inactive' })
-  expect(nameOf(collapsedSegments(call, 80))).toEqual({ text: 'Bash', color: 'success', bold: true })
-  expect(nameOf(collapsedSegments({ ...call, isErrored: true }, 80))?.color).toBe('error')
-  expect(nameOf(collapsedSegments({ ...call, isRunning: true }, 80))?.color).toBe('warning')
+test('the default done color is the muted hex and not bold; problems stay bold and colored', () => {
+  expect(DEFAULT_DONE_COLOR).toBe('#7d9a83')
+  expect(STATUS_COLOR).toEqual({ done: '#7d9a83', error: 'error', running: 'warning', interrupted: 'inactive' })
+  expect(nameOf(collapsedSegments(call, 80))).toEqual({ text: 'Bash', color: '#7d9a83', bold: false })
+  expect(nameOf(collapsedSegments({ ...call, isErrored: true }, 80))).toEqual({ text: 'Bash', color: 'error', bold: true })
+  expect(nameOf(collapsedSegments({ ...call, isRunning: true }, 80))).toEqual({ text: 'Bash', color: 'warning', bold: true })
   expect(nameOf(collapsedSegments({ ...call, isInterrupted: true }, 80))?.color).toBe('inactive')
+})
+
+test('a chosen done color replaces the default in collapsed and expanded rows, not the problem colors', () => {
+  expect(nameOf(collapsedSegments(call, 80, 'cyan'))?.color).toBe('cyan')
+  expect(nameOf(expandedSegments(call, 80, 'cyan'))?.color).toBe('cyan')
+  expect(nameOf(collapsedSegments({ ...call, isErrored: true }, 80, 'cyan'))?.color).toBe('error')
 })
 
 test('a done row shows no status word; other statuses end the row in their color', () => {

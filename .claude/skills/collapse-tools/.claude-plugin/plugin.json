@@ -1,7 +1,7 @@
 {
   "name": "collapse-tools",
   "version": "0.3.0",
-  "description": "Draws each tool call as one line, [+] Name  arg, with the name in a color you can change. Click a row to expand it, or run /collapse-tools to toggle all. Haiku summaries (on by default) replace the raw argument with a short label.",
+  "description": "Collapses each tool call to one clickable line in a color you pick, showing the model's own description of the call where it has one.",
   "author": {
     "name": "0xnicholasy",
     "url": "https://github.com/0xnicholasy"
@@ -25,8 +25,8 @@
     },
     "summaries": {
       "type": "boolean",
-      "title": "Haiku summaries",
-      "description": "Replace long or multi-step tool arguments on collapsed rows with a short Haiku summary. Default on.",
+      "title": "Row summaries",
+      "description": "Show the description the model wrote for a call (Bash, Agent) instead of the raw argument on collapsed rows. Default on.",
       "default": true
     }
   }

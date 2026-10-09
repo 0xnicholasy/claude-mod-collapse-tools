@@ -164,7 +164,7 @@ function clipSegments(segments: readonly Segment[], width: number): Segment[] {
 
 // `[+] Name  arg            status`: the marker dim, the name bold in the status color, the arg dim
 // and cut to fit, the status word right-aligned and only when the call is not done. A non-empty
-// `summary` (the Haiku label) is drawn where the arg would be.
+// `summary` (the model-written description) is drawn where the arg would be.
 export function collapsedSegments(
   call: CallView,
   columns: number | undefined,

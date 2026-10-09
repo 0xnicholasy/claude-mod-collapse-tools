@@ -1,4 +1,4 @@
-import type { CommandRunInput, ModelCompleteInput, ModelCompleteResult, On } from 'claude-code'
+import type { CommandRunInput } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { HINT_TEXT } from './summary'
@@ -126,160 +126,71 @@ test('color subcommand: an invalid color is rejected without saving; a valid one
   expect((await $.command.run({ ...RUN, args: 'bogus' })).text).toContain('Usage: /collapse-tools')
 })
 
-const USAGE_ZERO = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
-const answer = (text: string) => ({ value: { isAnswered: true as const, text, usage: USAGE_ZERO } })
-const bashResult = { stdout: 'x', stderr: '', interrupted: false }
-
-// Stubs the tool beneath the plugin (recording each call's id) and the model (recording each request).
-function stubCalls(on: On, reply: () => { value: ModelCompleteResult }) {
-  const ids: string[] = []
-  const requests: ModelCompleteInput[] = []
-  on('tool.call', async (_$, e) => {
-    ids.push(e.tool_use_id)
-    return { result: bashResult }
+// Mounts one call of `tool` with an explicit input, as the engine would draw it.
+const mountCall = ($: Engine, tool: string, id: string, input: Record<string, unknown>) =>
+  $.ui.mount({
+    plugin: 'collapse-tools',
+    surface: 'terminal',
+    component: 'ToolUse',
+    props: { ...props, tool, tool_use_id: id, input },
+    requestId: id,
+    viewport,
   })
-  on('model.complete', async (_$, e) => {
-    requests.push(e)
-    return reply()
-  })
-  return { ids, requests }
-}
 
-// Stubs only the model beneath the plugin, recording each request.
-function stubModel(on: On) {
-  const requests: ModelCompleteInput[] = []
-  on('model.complete', async (_$, e) => {
-    requests.push(e)
-    return answer('Run a command')
-  })
-  return { requests }
-}
+const GIT_CALL = { command: 'git status && git log -1', description: 'Show git status head and last commit' }
 
-test('a Bash call is summarized by one Haiku request and the collapsed row shows the summary', async ($, on) => {
+test('a collapsed Bash row shows the model description instead of the command; expanding shows the raw command', async ($, on) => {
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
-  const { ids, requests } = stubCalls(on, () => answer('"Check repo status and fetch origin."'))
-  const out = await $.tool.call({ tool: 'Bash', command: 'git status && git fetch origin' })
-  expect(out.result).toEqual(bashResult)
-  expect(requests).toHaveLength(1)
-  expect(requests[0]).toMatchObject({ model: 'haiku', effort: 'low', maxTokens: 40, timeoutMs: 4000 })
-  expect(requests[0]?.prompt).toBe('Tool: Bash\nInput: {"command":"git status && git fetch origin"}')
-  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
-  expect(await use.find({ text: '[+] Bash  Check repo status and fetch origin' })).toBeDefined()
-  await use.press({ key: `collapse-tools:${ids[0]}` })
-  expect(await use.find({ text: '[-] Bash  ls' })).toBeDefined()
+  const use = await mountCall($, 'Bash', 'toolu_5', GIT_CALL)
+  expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeDefined()
+  expect(JSON.stringify(await use.drawn())).not.toContain('git status &&')
+  await use.press({ key: 'collapse-tools:toolu_5' })
+  expect(JSON.stringify(await use.drawn())).toContain('[-] Bash  git status && git log -1')
+  expect(JSON.stringify(await use.drawn())).toContain('description: Show git status head and last commit')
 })
 
-test('a repeated identical call reuses the cached summary; a different input asks again', async ($, on) => {
+test('a collapsed Agent row shows its description', async ($, on) => {
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
-  const { ids, requests } = stubCalls(on, () => answer('Load the auth middleware'))
-  await $.tool.call({ tool: 'Bash', command: 'cat auth.ts' })
-  await $.tool.call({ tool: 'Bash', command: 'cat auth.ts' })
-  expect(requests).toHaveLength(1)
-  const [second] = await mountTool($, 'Bash', ids[1] ?? '')
-  expect(await second.find({ text: '[+] Bash  Load the auth middleware' })).toBeDefined()
-  await $.tool.call({ tool: 'Bash', command: 'cat other.ts' })
-  expect(requests).toHaveLength(2)
+  const use = await mountCall($, 'Agent', 'toolu_6', { prompt: 'Read every file and report', description: 'Audit the auth flow' })
+  expect(await use.find({ text: '[+] Agent  Audit the auth flow' })).toBeDefined()
 })
 
-test('a failed completion keeps the raw arg and the call still returns the tool result', async ($, on) => {
+test('rows without a usable description keep the raw arg: no description, an off-list tool, a blank description', async ($, on) => {
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
-  const logs: string[] = []
-  on('ui.log', async (_$, e) => {
-    logs.push(e.text)
-    return { value: undefined }
-  })
-  const { ids } = stubCalls(on, () => ({
-    value: { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: USAGE_ZERO },
-  }))
-  const out = await $.tool.call({ tool: 'Bash', command: 'ls' })
-  expect(out.result).toEqual(bashResult)
-  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
-  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
-  expect(logs.filter(text => text.includes('api-error'))).toHaveLength(1)
+  const bare = await mountCall($, 'Bash', 'toolu_7', { command: 'ls -la' })
+  expect(await bare.find({ text: '[+] Bash  ls -la' })).toBeDefined()
+  const mcp = await mountCall($, 'mcp__linear__save_issue', 'toolu_8', { command: 'deploy now', description: 'Long issue body' })
+  expect(await mcp.find({ text: '[+] linear:save_issue  deploy now' })).toBeDefined()
+  const blank = await mountCall($, 'Bash', 'toolu_9', { command: 'pwd', description: '  ' })
+  expect(await blank.find({ text: '[+] Bash  pwd' })).toBeDefined()
 })
 
-test('summary off is saved and rows show the raw arg again even with a summary stored; on restores it', async ($, on) => {
+test('summary off is saved and the same row shows the raw command; on restores the description', async ($, on) => {
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
   const saved: Array<{ key: string; value: unknown }> = []
   on('store.set', async (_$, e) => {
     saved.push({ key: e.key, value: e.value })
     return { value: undefined }
   })
-  const { ids } = stubCalls(on, () => answer('Show working tree status'))
-  await $.tool.call({ tool: 'Bash', command: 'git status' })
-  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
-  expect(await use.find({ text: '[+] Bash  Show working tree status' })).toBeDefined()
+  const use = await mountCall($, 'Bash', 'toolu_10', GIT_CALL)
+  expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeDefined()
 
   const off = await $.command.run({ ...RUN, args: 'summary off' })
-  expect(off.text).toBe('Haiku summaries off. Saved for future sessions.')
+  expect(off.text).toBe('Row summaries off. Saved for future sessions.')
   expect(saved).toContainEqual({ key: 'summaries', value: false })
-  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
+  expect(await use.find({ text: '[+] Bash  git status && git log -1' })).toBeDefined()
 
   await $.command.run({ ...RUN, args: 'summary on' })
   expect(saved).toContainEqual({ key: 'summaries', value: true })
-  expect(await use.find({ text: '[+] Bash  Show working tree status' })).toBeDefined()
+  expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeDefined()
   expect((await $.command.run({ ...RUN, args: 'summary maybe' })).text).toBe('Usage: /collapse-tools summary on|off')
 })
 
-test('with summaries off nothing is sent to the model', async ($, on) => {
-  const { requests } = stubCalls(on, () => answer('unused'))
-  await $.command.run({ ...RUN, args: 'summary off' })
-  await $.tool.call({ tool: 'Bash', command: 'ls' })
-  expect(requests).toHaveLength(0)
-})
-
-test('the summaries option off stops requests until the saved value says on', { options: { summaries: false } }, async ($, on) => {
+test('the summaries option off shows the raw command until the saved value says on', { options: { summaries: false } }, async ($, on) => {
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
   on('store.set', async () => ({ value: undefined }))
-  const { requests } = stubCalls(on, () => answer('Do something'))
-  await $.tool.call({ tool: 'Bash', command: 'ls' })
-  expect(requests).toHaveLength(0)
+  const use = await mountCall($, 'Bash', 'toolu_11', GIT_CALL)
+  expect(await use.find({ text: '[+] Bash  git status && git log -1' })).toBeDefined()
   await $.command.run({ ...RUN, args: 'summary on' })
-  await $.tool.call({ tool: 'Bash', command: 'ls -la' })
-  expect(requests).toHaveLength(1)
-})
-
-test('a completion the engine refuses (rejects) leaves the raw arg and never throws out of the hook', async ($, on) => {
-  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
-  const ids: string[] = []
-  on('tool.call', async (_$, e) => {
-    ids.push(e.tool_use_id)
-    return { result: bashResult }
-  })
-  on('model.complete', async () => {
-    throw new Error('model blocked')
-  })
-  const out = await $.tool.call({ tool: 'Bash', command: 'ls' })
-  expect(out.result).toEqual(bashResult)
-  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
-  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
-})
-
-test('a tool that rejects beneath the hook still rejects the call, and the summary request is still made', async ($, on) => {
-  on('tool.call', async () => {
-    throw new Error('tool failed')
-  })
-  const { requests } = stubModel(on)
-  let caught: unknown
-  const outcome = await $.tool.call({ tool: 'Bash', command: 'ls' }).then(
-    () => 'resolved',
-    (error: unknown) => {
-      caught = error
-      return 'rejected'
-    },
-  )
-  expect(outcome).toBe('rejected')
-  // The harness replaces a throwing stub with its own error, so the thrown object cannot be compared
-  // here; its identity is asserted on awaitBoth in summarize.test.ts.
-  expect(caught instanceof Error).toBe(true)
-  expect(requests).toHaveLength(1)
-})
-
-test('a reply that cleans to nothing keeps the raw arg on the collapsed row', async ($, on) => {
-  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'engine row' }))
-  const { ids, requests } = stubCalls(on, () => answer("  ''. "))
-  const out = await $.tool.call({ tool: 'Bash', command: 'ls' })
-  expect(out.result).toEqual(bashResult)
-  expect(requests).toHaveLength(1)
-  const [use] = await mountTool($, 'Bash', ids[0] ?? '')
-  expect(await use.find({ text: '[+] Bash  ls' })).toBeDefined()
+  expect(await use.find({ text: '[+] Bash  Show git status head and last commit' })).toBeDefined()
 })

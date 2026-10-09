@@ -2,17 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 import { DONE_COLOR_STORE_KEY, resolveDoneColor, validColor } from './accent'
 import { HINT_TEXT, collapsedSegments, expandedSegments, isExpanded, keepsEngineRow } from './summary'
-import {
-  SUMMARIES_STORE_KEY,
-  SYSTEM,
-  awaitBoth,
-  cacheKey,
-  cleanSummary,
-  compactInput,
-  inputOfEvent,
-  resolveSummaries,
-  summaryPrompt,
-} from './summarize'
+import { SUMMARIES_STORE_KEY, describe, resolveSummaries } from './summarize'
 
 const collapsed = atom({ plugin: 'collapse-tools', key: 'collapsed' } as const, true as boolean)
 const epoch = atom({ plugin: 'collapse-tools', key: 'epoch' } as const, 0)
@@ -24,10 +14,6 @@ const doneColorOverride = atom({ plugin: 'collapse-tools', key: 'doneColorOverri
 // The setting saved by `/collapse-tools summary on|off`, loaded from the plugin store; null defers to
 // the plugin option `summaries`.
 const summariesOn = atom({ plugin: 'collapse-tools', key: 'summariesOn' } as const, null as boolean | null)
-// The Haiku summary of each call, keyed by tool_use_id. Written by the tool.call hook, read by the render.
-const summaryRef = { plugin: 'collapse-tools', key: 'summaries' } as const
-// Summaries already made this session, keyed by a hash of the tool and its compact input.
-const summaryCacheRef = { plugin: 'collapse-tools', key: 'summaryCache' } as const
 // Per-call override family: each member is addressed by tool_use_id, so a click redraws only that call.
 const overrideRef = { plugin: 'collapse-tools', key: 'overrides' } as const
 
@@ -101,10 +87,10 @@ async function runSummaryCommand($: EngineInterface, value: string): Promise<{ t
   } catch (error) {
     $.ui.log(`collapse-tools: summaries store write failed ${String(error)}`, { to: 'debug' })
 
-    return { text: `Haiku summaries ${label} for this session only; the choice could not be saved.` }
+    return { text: `Row summaries ${label} for this session only; the choice could not be saved.` }
   }
 
-  return { text: `Haiku summaries ${label}. Saved for future sessions.` }
+  return { text: `Row summaries ${label}. Saved for future sessions.` }
 }
 
 // Loads the saved global choice; a store error or a non-boolean keeps the default (collapsed).
@@ -116,47 +102,6 @@ async function loadSaved($: EngineInterface): Promise<void> {
     if (saved !== current) await update($, collapsed, () => saved)
   } catch (error) {
     $.ui.log(`collapse-tools: store read failed ${String(error)}`, { to: 'debug' })
-  }
-}
-
-// Asks Haiku for a one-line label of the call and stores it for the render. `option` is the plugin
-// option `summaries`. Never rejects: on any failure the row keeps the raw arg and one debug line says why.
-async function summarizeCall(
-  $: EngineInterface,
-  tool: string,
-  id: string,
-  // unknown: the tool.call event carries the model's arbitrary JSON arguments beside its own keys.
-  event: Readonly<Record<string, unknown>>,
-  // unknown: the plugin option is untyped; resolveSummaries accepts only a boolean.
-  option: unknown,
-): Promise<void> {
-  try {
-    if (!resolveSummaries(await read($, summariesOn), option)) return
-    const compact = compactInput(tool, inputOfEvent(event))
-    const cacheMember = { ...summaryCacheRef, id: cacheKey(tool, compact) }
-    let text = await read($, cacheMember)
-    if (text === undefined) {
-      const reply = await $.model.complete({
-        model: 'haiku',
-        system: SYSTEM,
-        prompt: summaryPrompt(tool, compact),
-        effort: 'low',
-        maxTokens: 40,
-        timeoutMs: 4000,
-      })
-      if (!reply.isAnswered) {
-        $.ui.log(`collapse-tools: summary skipped for ${tool}: ${reply.reason}`, { to: 'debug' })
-        return
-      }
-      text = cleanSummary(reply.text)
-      if (text === '') return
-      const fresh = text
-      await update($, cacheMember, () => fresh)
-    }
-    const label = text
-    await update($, { ...summaryRef, id }, () => label)
-  } catch (error) {
-    $.ui.log(`collapse-tools: summary failed for ${tool}: ${String(error)}`, { to: 'debug' })
   }
 }
 
@@ -191,15 +136,6 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // The tool runs at once; the summary is made beside it and both are awaited, so the hook resolves
-  // with exactly what the tool did.
-  on('tool.call', async ($, e, next) => {
-    const run = next(e)
-    const side = summarizeCall($, e.tool, e.tool_use_id, e, options.summaries)
-
-    return awaitBoth(run, side)
-  })
-
   on('command.run', { command: 'collapse-tools' }, async ($, e) => {
     const raw = e.args.trim()
     const word = raw.toLowerCase()
@@ -222,13 +158,12 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const id = e.props.tool_use_id
     const member = { ...overrideRef, id }
-    const [global, current, entry, override, summariesFlag, summary] = await Promise.all([
+    const [global, current, entry, override, summariesFlag] = await Promise.all([
       read($, collapsed),
       read($, epoch),
       read($, member),
       read($, doneColorOverride),
       read($, summariesOn),
-      read($, { ...summaryRef, id }),
     ])
     const doneColor = override ?? configColor
     const open = isExpanded(global, openOf(entry, current))
@@ -237,13 +172,14 @@ export const register: Register = (on, options) => {
       await update($, member, cur => ({ epoch: ep, open: !isExpanded(g, openOf(cur, ep)) }))
     }
     const call = e.props
+    const summary = resolveSummaries(summariesFlag, options.summaries) ? describe(call.tool, call.input) : null
     const segments = open
       ? expandedSegments(call, e.viewport?.columns, doneColor)
       : collapsedSegments(
           call,
           e.viewport?.columns,
           doneColor,
-          resolveSummaries(summariesFlag, options.summaries) ? summary : undefined,
+          summary ?? undefined,
         )
     const row = (
       <Button key={`collapse-tools:${id}`} plain onPress={toggle}>

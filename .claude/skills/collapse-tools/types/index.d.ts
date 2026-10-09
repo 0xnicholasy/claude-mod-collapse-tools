@@ -7,8 +7,6 @@ declare module 'claude-code' {
       doneColorOverride: string | null
       summariesOn: boolean | null
       overrides: StateFamily<{ epoch: number; open: boolean }>
-      summaries: StateFamily<string>
-      summaryCache: StateFamily<string>
     }
   }
 }

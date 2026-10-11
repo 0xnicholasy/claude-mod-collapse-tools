@@ -1,6 +1,6 @@
 <div align="center">
-  <img src=".claude/skills/collapse-tools/.claude-plugin/icon.png" alt="Collapse Tools icon" width="120" height="120">
-  <h1>Collapse Tools for Claude Code</h1>
+  <img src=".claude/skills/collapse-tools/.claude-plugin/icon.png" alt="Claude Fold icon" width="120" height="120">
+  <h1>Claude Fold for Claude Code</h1>
   <p>Every tool-call row in the transcript as one line.</p>
 
   [![CI](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/0xnicholasy/claude-mod-collapse-tools/actions/workflows/ci.yml) ![Version](https://img.shields.io/github/package-json/v/0xnicholasy/claude-mod-collapse-tools?filename=.claude%2Fskills%2Fcollapse-tools%2F.claude-plugin%2Fplugin.json&label=version) [![License](https://img.shields.io/github/license/0xnicholasy/claude-mod-collapse-tools)](LICENSE) [![Stars](https://img.shields.io/github/stars/0xnicholasy/claude-mod-collapse-tools?style=flat)](https://github.com/0xnicholasy/claude-mod-collapse-tools/stargazers)
@@ -8,7 +8,7 @@
   <a href="#installation">Install</a> · <a href="#usage">Usage</a> · <a href="#how-it-works">How it works</a>
 </div>
 
-Collapse Tools is a Claude Code plugin that draws each tool-call row in the transcript as one line, `[+] Name  arg`, to save screen rows. Click a row to expand it into a single `[-]` header followed by the normal output, or run `/collapse-tools` to toggle all calls at once. A toast at session start (once) tells you how. The tool name of a finished call is white by default, and you can change that color.
+Claude Fold is a Claude Code plugin that draws each tool-call row in the transcript as one line, `[+] Name  arg`, to save screen rows. Click a row to expand it into a single `[-]` header followed by the normal output, or run `/collapse-tools` to toggle all calls at once. The plugin id and command are still `collapse-tools`. A toast at session start (once) tells you how. The tool name of a finished call is white by default, and you can change that color.
 
 ## What it looks like
 

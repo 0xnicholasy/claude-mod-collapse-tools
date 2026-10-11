@@ -1,7 +1,8 @@
 {
   "name": "collapse-tools",
   "version": "0.3.0",
-  "description": "Collapses each tool call to one clickable line in a color you pick, showing the model's own description of the call where it has one.",
+  "displayName": "Claude Fold",
+  "description": "Claude Fold: Collapses each tool call to one clickable line in a color you pick, showing the model's own description of the call where it has one.",
   "author": {
     "name": "0xnicholasy",
     "url": "https://github.com/0xnicholasy"
